@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#0ea5e9">
+    <meta name="theme-color" content="#e0f2fe">
     <title>GraphCraft — Coordinate Calculator</title>
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="apple-touch-icon" href="favicon.png">
@@ -152,19 +152,49 @@
             <!-- Graph Preview -->
             <div class="graph-container">
                 <h3>📈 Graph Preview with Regression Line</h3>
+                
+                <!-- Graph Title Inputs -->
+                <div class="graph-title-inputs">
+                    <div class="input-group">
+                        <label for="graphTitle">Graph Title</label>
+                        <input type="text" id="graphTitle" placeholder="Enter graph title">
+                    </div>
+                    <div class="input-group">
+                        <label for="xAxisTitle">X-Axis Title</label>
+                        <input type="text" id="xAxisTitle" placeholder="e.g., Time (s)">
+                    </div>
+                    <div class="input-group">
+                        <label for="yAxisTitle">Y-Axis Title</label>
+                        <input type="text" id="yAxisTitle" placeholder="e.g., Distance (m)">
+                    </div>
+                </div>
+                
                 <div class="regression-info">
                     <span class="regression-label">Regression Equation:</span>
                     <span id="regressionEquation" class="regression-value">y = mx + c</span>
                     <span class="regression-label">R² =</span>
                     <span id="rSquared" class="regression-value">-</span>
                 </div>
-                <div class="canvas-wrapper">
+                <div class="graph-controls">
+                    <button id="zoomOutBtn" class="btn btn-small btn-primary">➖ Zoom Out</button>
+                    <span id="zoomLevel" class="zoom-level">100%</span>
+                    <button id="zoomInBtn" class="btn btn-small btn-primary">➕ Zoom In</button>
+                    <button id="resetZoomBtn" class="btn btn-small btn-settings">↺ Reset</button>
+                    <button id="downloadPdfBtn" class="btn btn-small btn-success">📥 Download PDF</button>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="includeTableCheckbox">
+                        <span>Include data table</span>
+                    </label>
+                </div>
+                <div class="canvas-wrapper" id="canvasWrapper">
                     <canvas id="graphCanvas"></canvas>
                 </div>
+                <p class="graph-hint">💡 Scroll to pan • Use buttons to zoom</p>
             </div>
         </section>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
