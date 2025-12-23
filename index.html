@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0ea5e9">
+    <title>GraphCraft — Coordinate Calculator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>✨ GraphCraft</h1>
+        <p class="subtitle">Effortlessly transform your data into perfect hand-drawn coordinates</p>
+
+        <!-- Grid Dimensions Section -->
+        <section class="card">
+            <h2>Grid Dimensions</h2>
+            <div class="grid-inputs">
+                <div class="input-group">
+                    <label for="gridWidth">Width</label>
+                    <input type="number" id="gridWidth" value="90" min="1" inputmode="numeric">
+                </div>
+                <div class="input-group">
+                    <label for="gridHeight">Height</label>
+                    <input type="number" id="gridHeight" value="55" min="1" inputmode="numeric">
+                </div>
+                <div class="input-group">
+                    <label for="axisInterval">Axis Interval</label>
+                    <input type="number" id="axisInterval" value="5" min="1" inputmode="numeric">
+                </div>
+            </div>
+        </section>
+
+        <!-- Data Input Section -->
+        <section class="card">
+            <h2>Data Input</h2>
+            <div class="table-container">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>X</th>
+                            <th>Y</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataBody">
+                        <!-- Rows will be added dynamically -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="button-group">
+                <button id="addRowBtn" class="btn btn-primary">+ Add</button>
+                <button id="add5RowsBtn" class="btn btn-success">+ 5 Rows</button>
+                <button id="clearAllBtn" class="btn btn-danger">Clear</button>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section class="card results-section" id="resultsSection" style="display: none;">
+            <h2>Results</h2>
+            
+            <!-- Scale Info - Highlighted -->
+            <div class="scale-highlight">
+                <h3>📏 Scale (Write this on your graph)</h3>
+                <div class="scale-grid">
+                    <div class="scale-item">
+                        <span class="label">X-Axis:</span>
+                        <span id="xScale" class="value">-</span>
+                    </div>
+                    <div class="scale-item">
+                        <span class="label">Y-Axis:</span>
+                        <span id="yScale" class="value">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Range Info -->
+            <div class="range-info">
+                <h3>Data Range Analysis</h3>
+                <div class="range-grid">
+                    <div class="range-item">
+                        <span class="label">X Range:</span>
+                        <span id="xRange" class="value">-</span>
+                    </div>
+                    <div class="range-item">
+                        <span class="label">Y Range:</span>
+                        <span id="yRange" class="value">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Axis Markings Table -->
+            <div class="axis-table-container">
+                <h3>📐 Axis Markings (Label these on your axes)</h3>
+                <div class="axis-tables-wrapper">
+                    <div class="axis-table-section">
+                        <h4>X-Axis</h4>
+                        <table id="xAxisTable">
+                            <thead>
+                                <tr>
+                                    <th>Grid Position</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody id="xAxisBody">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="axis-table-section">
+                        <h4>Y-Axis</h4>
+                        <table id="yAxisTable">
+                            <thead>
+                                <tr>
+                                    <th>Grid Position</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody id="yAxisBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scaled Coordinates Table -->
+            <div class="scaled-table-container">
+                <h3>Scaled Coordinates (Plot these on your graph paper)</h3>
+                <table id="scaledTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Original X</th>
+                            <th>Original Y</th>
+                            <th>Grid X (squares)</th>
+                            <th>Grid Y (squares)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scaledBody">
+                        <!-- Results will be added dynamically -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Graph Preview -->
+            <div class="graph-container">
+                <h3>📈 Graph Preview with Regression Line</h3>
+                <div class="regression-info">
+                    <span class="regression-label">Regression Equation:</span>
+                    <span id="regressionEquation" class="regression-value">y = mx + c</span>
+                    <span class="regression-label">R² =</span>
+                    <span id="rSquared" class="regression-value">-</span>
+                </div>
+                <div class="canvas-wrapper">
+                    <canvas id="graphCanvas"></canvas>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
