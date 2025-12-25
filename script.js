@@ -15,6 +15,21 @@ let yColumnCount = 1;
 // LocalStorage key
 const CACHE_KEY = 'graphcraft_data';
 
+// Helper function to draw rounded rectangles
+function roundRect(ctx, x, y, width, height, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+}
+
 // Save data to localStorage
 function saveToCache() {
     const data = {
@@ -846,16 +861,31 @@ function drawGraph(results) {
     const graphWidth = canvasWidth - scaledPadding * 2;
     const graphHeight = canvasHeight - scaledPadding * 2;
     
-    // Clear canvas
-    ctx.fillStyle = 'white';
+    // Clear canvas with subtle gradient background (Desmos-like)
+    const bgGradient = ctx.createLinearGradient(0, 0, canvasWidth, canvasHeight);
+    bgGradient.addColorStop(0, '#fafbfc');
+    bgGradient.addColorStop(1, '#f0f4f8');
+    ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    
+    // Draw graph area background (clean white)
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.08)';
+    ctx.shadowBlur = 20 * currentZoom;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 4 * currentZoom;
+    roundRect(ctx, scaledPadding - 10 * currentZoom, scaledPadding - 10 * currentZoom, 
+              graphWidth + 20 * currentZoom, graphHeight + 20 * currentZoom, 12 * currentZoom);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
     
     // Draw graph title
     if (graphTitle) {
         ctx.fillStyle = '#1e293b';
-        ctx.font = `bold ${24 * currentZoom}px Arial`;
+        ctx.font = `600 ${22 * currentZoom}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
         ctx.textAlign = 'center';
-        ctx.fillText(graphTitle, canvasWidth / 2, 35 * currentZoom);
+        ctx.fillText(graphTitle, canvasWidth / 2, 40 * currentZoom);
     }
     
     // Colors for multiple Y series
@@ -919,13 +949,38 @@ function drawGraph(results) {
     
     // Font size scales with zoom
     const baseFontSize = 12 * currentZoom;
-    const smallFontSize = 10 * currentZoom;
+    const smallFontSize = 11 * currentZoom;
     
-    // Draw grid
-    ctx.strokeStyle = '#e0e0e0';
+    // Draw minor grid lines (very subtle)
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.6)';
+    ctx.lineWidth = 0.5 * currentZoom;
+    
+    // Minor vertical grid lines (every half interval)
+    const minorInterval = results.axisInterval / 2;
+    for (let x = 0; x <= maxGridX; x += minorInterval) {
+        if (x % results.axisInterval !== 0) {
+            ctx.beginPath();
+            ctx.moveTo(toCanvasX(x), scaledPadding);
+            ctx.lineTo(toCanvasX(x), canvasHeight - scaledPadding);
+            ctx.stroke();
+        }
+    }
+    
+    // Minor horizontal grid lines
+    for (let y = 0; y <= maxGridY; y += minorInterval) {
+        if (y % results.axisInterval !== 0) {
+            ctx.beginPath();
+            ctx.moveTo(scaledPadding, toCanvasY(y));
+            ctx.lineTo(canvasWidth - scaledPadding, toCanvasY(y));
+            ctx.stroke();
+        }
+    }
+    
+    // Draw major grid lines (Desmos-like soft gray)
+    ctx.strokeStyle = 'rgba(203, 213, 225, 0.8)';
     ctx.lineWidth = 1 * currentZoom;
     
-    // Vertical grid lines
+    // Major vertical grid lines
     for (let x = 0; x <= maxGridX; x += results.axisInterval) {
         ctx.beginPath();
         ctx.moveTo(toCanvasX(x), scaledPadding);
@@ -933,7 +988,7 @@ function drawGraph(results) {
         ctx.stroke();
     }
     
-    // Horizontal grid lines
+    // Major horizontal grid lines
     for (let y = 0; y <= maxGridY; y += results.axisInterval) {
         ctx.beginPath();
         ctx.moveTo(scaledPadding, toCanvasY(y));
@@ -941,9 +996,10 @@ function drawGraph(results) {
         ctx.stroke();
     }
     
-    // Draw axes
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 2 * currentZoom;
+    // Draw axes (Desmos-like bold dark axes)
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 2.5 * currentZoom;
+    ctx.lineCap = 'round';
     
     // X-axis
     ctx.beginPath();
@@ -957,9 +1013,29 @@ function drawGraph(results) {
     ctx.lineTo(scaledPadding, scaledPadding);
     ctx.stroke();
     
-    // Draw axis labels
-    ctx.fillStyle = '#333';
-    ctx.font = `${smallFontSize}px Arial`;
+    // Draw axis tick marks
+    ctx.lineWidth = 1.5 * currentZoom;
+    const tickLength = 6 * currentZoom;
+    
+    // X-axis ticks
+    for (let x = 0; x <= maxGridX; x += results.axisInterval) {
+        ctx.beginPath();
+        ctx.moveTo(toCanvasX(x), canvasHeight - scaledPadding);
+        ctx.lineTo(toCanvasX(x), canvasHeight - scaledPadding + tickLength);
+        ctx.stroke();
+    }
+    
+    // Y-axis ticks
+    for (let y = 0; y <= maxGridY; y += results.axisInterval) {
+        ctx.beginPath();
+        ctx.moveTo(scaledPadding, toCanvasY(y));
+        ctx.lineTo(scaledPadding - tickLength, toCanvasY(y));
+        ctx.stroke();
+    }
+    
+    // Draw axis labels (Desmos-like clean font)
+    ctx.fillStyle = '#475569';
+    ctx.font = `500 ${smallFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
     ctx.textAlign = 'center';
     
     // X-axis labels
@@ -979,19 +1055,19 @@ function drawGraph(results) {
     
     // Draw X-axis title
     if (xAxisTitle) {
-        ctx.fillStyle = '#374151';
-        ctx.font = `bold ${14 * currentZoom}px Arial`;
+        ctx.fillStyle = '#334155';
+        ctx.font = `600 ${14 * currentZoom}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
         ctx.textAlign = 'center';
-        ctx.fillText(xAxisTitle, canvasWidth / 2, canvasHeight - 20 * currentZoom);
+        ctx.fillText(xAxisTitle, canvasWidth / 2, canvasHeight - 15 * currentZoom);
     }
     
     // Draw Y-axis title (rotated)
     if (yAxisTitle) {
         ctx.save();
-        ctx.fillStyle = '#374151';
-        ctx.font = `bold ${14 * currentZoom}px Arial`;
+        ctx.fillStyle = '#334155';
+        ctx.font = `600 ${14 * currentZoom}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
         ctx.textAlign = 'center';
-        ctx.translate(25 * currentZoom, canvasHeight / 2);
+        ctx.translate(22 * currentZoom, canvasHeight / 2);
         ctx.rotate(-Math.PI / 2);
         ctx.fillText(yAxisTitle, 0, 0);
         ctx.restore();
@@ -1001,8 +1077,9 @@ function drawGraph(results) {
     for (let yIdx = 0; yIdx < yCount; yIdx++) {
         const colorIdx = yIdx % regressionColors.length;
         ctx.strokeStyle = regressionColors[colorIdx];
-        ctx.lineWidth = 2.5 * currentZoom;
-        ctx.setLineDash([8 * currentZoom, 8 * currentZoom]);
+        ctx.lineWidth = 1.5 * currentZoom;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         
         // Calculate regression for this Y series
         const seriesRegression = calculateRegression(results.scaledPoints, yIdx);
@@ -1023,10 +1100,9 @@ function drawGraph(results) {
         ctx.lineTo(toCanvasX(gridX2), toCanvasY(gridY2));
         ctx.stroke();
     }
-    ctx.setLineDash([]);
     
     // Draw data points for each Y series
-    const pointRadius = 8 * currentZoom;
+    const pointRadius = 4 * currentZoom;
     
     for (let yIdx = 0; yIdx < yCount; yIdx++) {
         const colorIdx = yIdx % seriesColors.length;
@@ -1036,33 +1112,58 @@ function drawGraph(results) {
             const scaledY = point.scaledYValues[yIdx];
             if (scaledY === null) return;
             
+            const cx = toCanvasX(point.scaledX);
+            const cy = toCanvasY(scaledY);
+            
+            // Draw point
             ctx.fillStyle = colors.fill;
             ctx.beginPath();
-            ctx.arc(toCanvasX(point.scaledX), toCanvasY(scaledY), pointRadius, 0, Math.PI * 2);
+            ctx.arc(cx, cy, pointRadius, 0, Math.PI * 2);
             ctx.fill();
             
             // Draw point border
             ctx.strokeStyle = colors.stroke;
-            ctx.lineWidth = 2 * currentZoom;
+            ctx.lineWidth = 1.5 * currentZoom;
             ctx.stroke();
+            
+            // Draw data label above the point
+            const originalY = point.originalYValues[yIdx];
+            if (originalY !== null) {
+                ctx.fillStyle = '#475569';
+                ctx.font = `500 ${10 * currentZoom}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+                ctx.textAlign = 'center';
+                const labelText = `(${point.originalX}, ${originalY})`;
+                ctx.fillText(labelText, cx, cy - pointRadius - 6 * currentZoom);
+            }
         });
     }
     
-    // Draw legend (fixed position in top-right)
-    const legendItemHeight = 25 * currentZoom;
+    // Draw legend (Desmos-like glassmorphism style)
+    const legendItemHeight = 24 * currentZoom;
     const legendHeight = (yCount * 2 + 1) * legendItemHeight;
-    const legendX = canvasWidth - 180 * currentZoom;
-    const legendY = 25 * currentZoom;
+    const legendWidth = 175 * currentZoom;
+    const legendX = canvasWidth - legendWidth - 20 * currentZoom;
+    const legendY = 55 * currentZoom;
     
-    ctx.font = `${baseFontSize}px Arial`;
+    ctx.font = `500 ${baseFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
     ctx.textAlign = 'left';
     
-    // Legend background
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.fillRect(legendX - 15 * currentZoom, legendY - 15 * currentZoom, 190 * currentZoom, legendHeight);
-    ctx.strokeStyle = '#ddd';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(legendX - 15 * currentZoom, legendY - 15 * currentZoom, 190 * currentZoom, legendHeight);
+    // Legend background with glassmorphism effect
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+    ctx.shadowBlur = 16 * currentZoom;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 4 * currentZoom;
+    roundRect(ctx, legendX - 12 * currentZoom, legendY - 12 * currentZoom, legendWidth + 10 * currentZoom, legendHeight, 10 * currentZoom);
+    ctx.fill();
+    
+    // Legend border
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.8)';
+    ctx.lineWidth = 1 * currentZoom;
+    roundRect(ctx, legendX - 12 * currentZoom, legendY - 12 * currentZoom, legendWidth + 10 * currentZoom, legendHeight, 10 * currentZoom);
+    ctx.stroke();
     
     // Draw legend items for each series
     let legendOffset = 0;
@@ -1075,24 +1176,26 @@ function drawGraph(results) {
         // Data points legend
         ctx.fillStyle = colors.fill;
         ctx.beginPath();
-        ctx.arc(legendX, legendY + legendOffset, 6 * currentZoom, 0, Math.PI * 2);
+        ctx.arc(legendX, legendY + legendOffset, 5 * currentZoom, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#333';
-        ctx.fillText(seriesName, legendX + 15 * currentZoom, legendY + legendOffset + 5 * currentZoom);
+        ctx.strokeStyle = colors.stroke;
+        ctx.lineWidth = 1.5 * currentZoom;
+        ctx.stroke();
+        ctx.fillStyle = '#475569';
+        ctx.fillText(seriesName, legendX + 14 * currentZoom, legendY + legendOffset + 4 * currentZoom);
         legendOffset += legendItemHeight;
         
         // Regression line legend
         ctx.strokeStyle = regressionColors[colorIdx];
-        ctx.lineWidth = 2 * currentZoom;
-        ctx.setLineDash([5 * currentZoom, 5 * currentZoom]);
+        ctx.lineWidth = 2.5 * currentZoom;
+        ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(legendX - 8 * currentZoom, legendY + legendOffset);
-        ctx.lineTo(legendX + 8 * currentZoom, legendY + legendOffset);
+        ctx.moveTo(legendX - 7 * currentZoom, legendY + legendOffset);
+        ctx.lineTo(legendX + 7 * currentZoom, legendY + legendOffset);
         ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = '#333';
+        ctx.fillStyle = '#475569';
         const regName = yCount > 1 ? `Y${subscript} Regression` : 'Regression Line';
-        ctx.fillText(regName, legendX + 15 * currentZoom, legendY + legendOffset + 5 * currentZoom);
+        ctx.fillText(regName, legendX + 14 * currentZoom, legendY + legendOffset + 4 * currentZoom);
         legendOffset += legendItemHeight;
     }
 }
@@ -1114,16 +1217,25 @@ function drawGraphToCanvas(canvas, ctx, results, scale) {
     const xAxisTitle = document.getElementById('xAxisTitle')?.value || '';
     const yAxisTitle = document.getElementById('yAxisTitle')?.value || '';
     
-    // Clear canvas
-    ctx.fillStyle = 'white';
+    // Clear canvas with subtle gradient background (Desmos-like)
+    const bgGradient = ctx.createLinearGradient(0, 0, canvasWidth, canvasHeight);
+    bgGradient.addColorStop(0, '#fafbfc');
+    bgGradient.addColorStop(1, '#f0f4f8');
+    ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    
+    // Draw graph area background
+    ctx.fillStyle = '#ffffff';
+    roundRect(ctx, scaledPadding - 10 * scale, scaledPadding - 10 * scale, 
+              graphWidth + 20 * scale, graphHeight + 20 * scale, 12 * scale);
+    ctx.fill();
     
     // Draw graph title
     if (graphTitle) {
         ctx.fillStyle = '#1e293b';
-        ctx.font = `bold ${24 * scale}px Arial`;
+        ctx.font = `600 ${22 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
         ctx.textAlign = 'center';
-        ctx.fillText(graphTitle, canvasWidth / 2, 35 * scale);
+        ctx.fillText(graphTitle, canvasWidth / 2, 40 * scale);
     }
     
     // Calculate regression
@@ -1148,10 +1260,32 @@ function drawGraphToCanvas(canvas, ctx, results, scale) {
     
     // Font sizes
     const baseFontSize = 12 * scale;
-    const smallFontSize = 10 * scale;
+    const smallFontSize = 11 * scale;
     
-    // Draw grid
-    ctx.strokeStyle = '#e0e0e0';
+    // Draw minor grid lines
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.6)';
+    ctx.lineWidth = 0.5 * scale;
+    
+    const minorInterval = results.axisInterval / 2;
+    for (let x = 0; x <= maxGridX; x += minorInterval) {
+        if (x % results.axisInterval !== 0) {
+            ctx.beginPath();
+            ctx.moveTo(toCanvasX(x), scaledPadding);
+            ctx.lineTo(toCanvasX(x), canvasHeight - scaledPadding);
+            ctx.stroke();
+        }
+    }
+    for (let y = 0; y <= maxGridY; y += minorInterval) {
+        if (y % results.axisInterval !== 0) {
+            ctx.beginPath();
+            ctx.moveTo(scaledPadding, toCanvasY(y));
+            ctx.lineTo(canvasWidth - scaledPadding, toCanvasY(y));
+            ctx.stroke();
+        }
+    }
+    
+    // Draw major grid lines
+    ctx.strokeStyle = 'rgba(203, 213, 225, 0.8)';
     ctx.lineWidth = 1 * scale;
     
     // Vertical grid lines
@@ -1171,8 +1305,9 @@ function drawGraphToCanvas(canvas, ctx, results, scale) {
     }
     
     // Draw axes
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 2 * scale;
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 2.5 * scale;
+    ctx.lineCap = 'round';
     
     // X-axis
     ctx.beginPath();
@@ -1186,9 +1321,26 @@ function drawGraphToCanvas(canvas, ctx, results, scale) {
     ctx.lineTo(scaledPadding, scaledPadding);
     ctx.stroke();
     
+    // Draw tick marks
+    ctx.lineWidth = 1.5 * scale;
+    const tickLength = 6 * scale;
+    
+    for (let x = 0; x <= maxGridX; x += results.axisInterval) {
+        ctx.beginPath();
+        ctx.moveTo(toCanvasX(x), canvasHeight - scaledPadding);
+        ctx.lineTo(toCanvasX(x), canvasHeight - scaledPadding + tickLength);
+        ctx.stroke();
+    }
+    for (let y = 0; y <= maxGridY; y += results.axisInterval) {
+        ctx.beginPath();
+        ctx.moveTo(scaledPadding, toCanvasY(y));
+        ctx.lineTo(scaledPadding - tickLength, toCanvasY(y));
+        ctx.stroke();
+    }
+    
     // Draw axis labels
-    ctx.fillStyle = '#333';
-    ctx.font = `${smallFontSize}px Arial`;
+    ctx.fillStyle = '#475569';
+    ctx.font = `500 ${smallFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
     ctx.textAlign = 'center';
     
     // X-axis labels
@@ -1208,19 +1360,19 @@ function drawGraphToCanvas(canvas, ctx, results, scale) {
     
     // Draw X-axis title
     if (xAxisTitle) {
-        ctx.fillStyle = '#374151';
-        ctx.font = `bold ${14 * scale}px Arial`;
+        ctx.fillStyle = '#334155';
+        ctx.font = `600 ${14 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
         ctx.textAlign = 'center';
-        ctx.fillText(xAxisTitle, canvasWidth / 2, canvasHeight - 20 * scale);
+        ctx.fillText(xAxisTitle, canvasWidth / 2, canvasHeight - 15 * scale);
     }
     
     // Draw Y-axis title (rotated)
     if (yAxisTitle) {
         ctx.save();
-        ctx.fillStyle = '#374151';
-        ctx.font = `bold ${14 * scale}px Arial`;
+        ctx.fillStyle = '#334155';
+        ctx.font = `600 ${14 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
         ctx.textAlign = 'center';
-        ctx.translate(25 * scale, canvasHeight / 2);
+        ctx.translate(22 * scale, canvasHeight / 2);
         ctx.rotate(-Math.PI / 2);
         ctx.fillText(yAxisTitle, 0, 0);
         ctx.restore();
@@ -1245,8 +1397,8 @@ function drawGraphToCanvas(canvas, ctx, results, scale) {
     for (let yIdx = 0; yIdx < yCount; yIdx++) {
         const colorIdx = yIdx % regressionColors.length;
         ctx.strokeStyle = regressionColors[colorIdx];
-        ctx.lineWidth = 2.5 * scale;
-        ctx.setLineDash([8 * scale, 8 * scale]);
+        ctx.lineWidth = 1.5 * scale;
+        ctx.lineCap = 'round';
         
         const seriesRegression = calculateRegression(results.scaledPoints, yIdx);
         
@@ -1265,10 +1417,9 @@ function drawGraphToCanvas(canvas, ctx, results, scale) {
         ctx.lineTo(toCanvasX(gridX2), toCanvasY(gridY2));
         ctx.stroke();
     }
-    ctx.setLineDash([]);
     
     // Draw data points for each Y series
-    const pointRadius = 8 * scale;
+    const pointRadius = 4 * scale;
     
     for (let yIdx = 0; yIdx < yCount; yIdx++) {
         const colorIdx = yIdx % seriesColors.length;
@@ -1278,14 +1429,27 @@ function drawGraphToCanvas(canvas, ctx, results, scale) {
             const scaledY = point.scaledYValues[yIdx];
             if (scaledY === null) return;
             
+            const cx = toCanvasX(point.scaledX);
+            const cy = toCanvasY(scaledY);
+            
             ctx.fillStyle = colors.fill;
             ctx.beginPath();
-            ctx.arc(toCanvasX(point.scaledX), toCanvasY(scaledY), pointRadius, 0, Math.PI * 2);
+            ctx.arc(cx, cy, pointRadius, 0, Math.PI * 2);
             ctx.fill();
             
             ctx.strokeStyle = colors.stroke;
-            ctx.lineWidth = 2 * scale;
+            ctx.lineWidth = 1.5 * scale;
             ctx.stroke();
+            
+            // Draw data label above the point
+            const originalY = point.originalYValues[yIdx];
+            if (originalY !== null) {
+                ctx.fillStyle = '#475569';
+                ctx.font = `500 ${10 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+                ctx.textAlign = 'center';
+                const labelText = `(${point.originalX}, ${originalY})`;
+                ctx.fillText(labelText, cx, cy - pointRadius - 6 * scale);
+            }
         });
     }
     
@@ -1321,12 +1485,10 @@ function drawGraphToCanvas(canvas, ctx, results, scale) {
         
         ctx.strokeStyle = regressionColors[colorIdx];
         ctx.lineWidth = 2 * scale;
-        ctx.setLineDash([5 * scale, 5 * scale]);
         ctx.beginPath();
         ctx.moveTo(legendX - 8 * scale, legendY + legendOffset);
         ctx.lineTo(legendX + 8 * scale, legendY + legendOffset);
         ctx.stroke();
-        ctx.setLineDash([]);
         ctx.fillStyle = '#333';
         const regName = yCount > 1 ? `Y${subscript} Regression` : 'Regression Line';
         ctx.fillText(regName, legendX + 15 * scale, legendY + legendOffset + 5 * scale);
@@ -1341,6 +1503,7 @@ function setupGraphControls() {
     const resetZoomBtn = document.getElementById('resetZoomBtn');
     const zoomLevelDisplay = document.getElementById('zoomLevel');
     const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+    const sharePdfBtn = document.getElementById('sharePdfBtn');
     
     if (!zoomInBtn) return; // Controls not yet in DOM
     
@@ -1432,97 +1595,8 @@ function setupGraphControls() {
                 // Check if data table should be included
                 const includeTable = document.getElementById('includeTableCheckbox')?.checked;
                 if (includeTable && currentResults) {
-                    // Add second page for data table
                     pdf.addPage('a4', 'portrait');
-                    
-                    const tablePageWidth = pdf.internal.pageSize.getWidth();
-                    const tablePageHeight = pdf.internal.pageSize.getHeight();
-                    const tableMargin = 15;
-                    let yPos = tableMargin;
-                    
-                    // Title
-                    pdf.setFontSize(18);
-                    pdf.setFont('helvetica', 'bold');
-                    const tableTitle = graphTitle || 'Data Table';
-                    pdf.text(tableTitle + ' - Data', tablePageWidth / 2, yPos, { align: 'center' });
-                    yPos += 15;
-                    
-                    // Scale info
-                    pdf.setFontSize(11);
-                    pdf.setFont('helvetica', 'normal');
-                    pdf.text(`X-Axis Scale: 1 square = ${currentResults.xScalePerSquare}`, tableMargin, yPos);
-                    yPos += 6;
-                    pdf.text(`Y-Axis Scale: 1 square = ${currentResults.yScalePerSquare}`, tableMargin, yPos);
-                    yPos += 12;
-                    
-                    // Table headers
-                    const colWidths = [15, 35, 35, 45, 45];
-                    const headers = ['#', 'Original X', 'Original Y', 'Grid X (sq)', 'Grid Y (sq)'];
-                    const startX = tableMargin;
-                    
-                    pdf.setFillColor(14, 165, 233); // Sky blue
-                    pdf.rect(startX, yPos - 5, colWidths.reduce((a, b) => a + b, 0), 8, 'F');
-                    
-                    pdf.setTextColor(255, 255, 255);
-                    pdf.setFont('helvetica', 'bold');
-                    pdf.setFontSize(10);
-                    let xPos = startX + 2;
-                    headers.forEach((header, i) => {
-                        pdf.text(header, xPos, yPos);
-                        xPos += colWidths[i];
-                    });
-                    yPos += 8;
-                    
-                    // Table rows
-                    pdf.setTextColor(0, 0, 0);
-                    pdf.setFont('helvetica', 'normal');
-                    pdf.setFontSize(9);
-                    
-                    currentResults.scaledPoints.forEach((point, index) => {
-                        // Check if need new page
-                        if (yPos > tablePageHeight - 20) {
-                            pdf.addPage('a4', 'portrait');
-                            yPos = tableMargin;
-                        }
-                        
-                        // Alternate row colors
-                        if (index % 2 === 0) {
-                            pdf.setFillColor(241, 245, 249);
-                            pdf.rect(startX, yPos - 4, colWidths.reduce((a, b) => a + b, 0), 6, 'F');
-                        }
-                        
-                        const rowData = [
-                            (index + 1).toString(),
-                            point.originalX.toString(),
-                            point.originalY.toString(),
-                            point.scaledX.toFixed(2),
-                            point.scaledY.toFixed(2)
-                        ];
-                        
-                        xPos = startX + 2;
-                        rowData.forEach((cell, i) => {
-                            pdf.text(cell, xPos, yPos);
-                            xPos += colWidths[i];
-                        });
-                        yPos += 6;
-                    });
-                    
-                    // Add regression info at bottom
-                    yPos += 10;
-                    if (yPos > tablePageHeight - 30) {
-                        pdf.addPage('a4', 'portrait');
-                        yPos = tableMargin;
-                    }
-                    
-                    const regression = calculateRegression(currentResults.scaledPoints);
-                    pdf.setFont('helvetica', 'bold');
-                    pdf.setFontSize(11);
-                    pdf.text('Regression Analysis:', tableMargin, yPos);
-                    yPos += 7;
-                    pdf.setFont('helvetica', 'normal');
-                    pdf.text(`Equation: y = ${regression.slope.toFixed(4)}x + ${regression.intercept.toFixed(4)}`, tableMargin, yPos);
-                    yPos += 6;
-                    pdf.text(`R² = ${regression.rSquared.toFixed(6)}`, tableMargin, yPos);
+                    addDataTableToPdf(pdf, graphTitle);
                 }
                 
                 // Download PDF
@@ -1534,10 +1608,208 @@ function setupGraphControls() {
         });
     }
     
+    // Share PDF functionality
+    if (sharePdfBtn) {
+        sharePdfBtn.addEventListener('click', async () => {
+            const canvas = document.getElementById('graphCanvas');
+            if (!canvas || !currentResults) {
+                alert('No graph to share. Please calculate coordinates first.');
+                return;
+            }
+            
+            try {
+                // Get title for filename
+                const graphTitle = document.getElementById('graphTitle')?.value || 'GraphCraft Graph';
+                const sanitizedTitle = graphTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'graph';
+                
+                // Create a high-resolution off-screen canvas for export
+                const exportCanvas = document.createElement('canvas');
+                const exportCtx = exportCanvas.getContext('2d');
+                
+                const exportScale = 3;
+                const baseWidth = 1200;
+                const baseHeight = 800;
+                
+                exportCanvas.width = baseWidth * exportScale;
+                exportCanvas.height = baseHeight * exportScale;
+                
+                drawGraphToCanvas(exportCanvas, exportCtx, currentResults, exportScale);
+                
+                // Create PDF
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({
+                    orientation: 'landscape',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+                
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                const margin = 10;
+                const maxWidth = pageWidth - 2 * margin;
+                const maxHeight = pageHeight - 2 * margin;
+                
+                const aspectRatio = baseWidth / baseHeight;
+                let pdfWidth = maxWidth;
+                let pdfHeight = pdfWidth / aspectRatio;
+                
+                if (pdfHeight > maxHeight) {
+                    pdfHeight = maxHeight;
+                    pdfWidth = pdfHeight * aspectRatio;
+                }
+                
+                const xOffset = (pageWidth - pdfWidth) / 2;
+                const yOffset = (pageHeight - pdfHeight) / 2;
+                
+                const imgData = exportCanvas.toDataURL('image/png', 1.0);
+                pdf.addImage(imgData, 'PNG', xOffset, yOffset, pdfWidth, pdfHeight, undefined, 'FAST');
+                
+                // Include data table if checked
+                const includeTable = document.getElementById('includeTableCheckbox')?.checked;
+                if (includeTable && currentResults) {
+                    pdf.addPage('a4', 'portrait');
+                    addDataTableToPdf(pdf, graphTitle);
+                }
+                
+                // Convert PDF to blob for sharing
+                const pdfBlob = pdf.output('blob');
+                const pdfFile = new File([pdfBlob], `${sanitizedTitle}.pdf`, { type: 'application/pdf' });
+                
+                // Check if Web Share API is available and supports files
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+                    await navigator.share({
+                        title: graphTitle || 'GraphCraft Graph',
+                        text: 'Check out this graph created with GraphCraft!',
+                        files: [pdfFile]
+                    });
+                } else {
+                    // Fallback: Copy a shareable message or offer download
+                    // Create a temporary download link as fallback
+                    const url = URL.createObjectURL(pdfBlob);
+                    
+                    // Try to copy graph info to clipboard as fallback
+                    const shareText = `📊 ${graphTitle || 'Graph'}\n` +
+                        `X Scale: 1 square = ${currentResults.xScalePerSquare}\n` +
+                        `Y Scale: 1 square = ${currentResults.yScalePerSquare}\n` +
+                        `Created with GraphCraft`;
+                    
+                    try {
+                        await navigator.clipboard.writeText(shareText);
+                        alert('Share not supported on this device. Graph info copied to clipboard! The PDF will download instead.');
+                    } catch (e) {
+                        alert('Share not supported on this device. The PDF will download instead.');
+                    }
+                    
+                    // Download as fallback
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `${sanitizedTitle}.pdf`;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                }
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    console.error('Share error:', error);
+                    alert('Error sharing. Please try downloading instead.');
+                }
+            }
+        });
+    }
+    
     function updateZoom() {
         zoomLevelDisplay.textContent = Math.round(currentZoom * 100) + '%';
         if (currentResults) {
             drawGraph(currentResults);
         }
     }
+}
+
+// Helper function to add data table to PDF
+function addDataTableToPdf(pdf, graphTitle) {
+    const tablePageWidth = pdf.internal.pageSize.getWidth();
+    const tablePageHeight = pdf.internal.pageSize.getHeight();
+    const tableMargin = 15;
+    let yPos = tableMargin;
+    
+    // Title
+    pdf.setFontSize(18);
+    pdf.setFont('helvetica', 'bold');
+    const tableTitle = graphTitle || 'Data Table';
+    pdf.text(tableTitle + ' - Data', tablePageWidth / 2, yPos, { align: 'center' });
+    yPos += 15;
+    
+    // Scale info
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`X-Axis Scale: 1 square = ${currentResults.xScalePerSquare}`, tableMargin, yPos);
+    yPos += 6;
+    pdf.text(`Y-Axis Scale: 1 square = ${currentResults.yScalePerSquare}`, tableMargin, yPos);
+    yPos += 12;
+    
+    // Table headers
+    const colWidths = [15, 35, 35, 45, 45];
+    const headers = ['#', 'Original X', 'Original Y', 'Grid X (sq)', 'Grid Y (sq)'];
+    const startX = tableMargin;
+    
+    pdf.setFillColor(14, 165, 233);
+    pdf.rect(startX, yPos - 5, colWidths.reduce((a, b) => a + b, 0), 8, 'F');
+    
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    let xPos = startX + 2;
+    headers.forEach((header, i) => {
+        pdf.text(header, xPos, yPos);
+        xPos += colWidths[i];
+    });
+    yPos += 8;
+    
+    // Table rows
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    
+    currentResults.scaledPoints.forEach((point, index) => {
+        if (yPos > tablePageHeight - 20) {
+            pdf.addPage('a4', 'portrait');
+            yPos = tableMargin;
+        }
+        
+        if (index % 2 === 0) {
+            pdf.setFillColor(241, 245, 249);
+            pdf.rect(startX, yPos - 4, colWidths.reduce((a, b) => a + b, 0), 6, 'F');
+        }
+        
+        const rowData = [
+            (index + 1).toString(),
+            point.originalX.toString(),
+            point.originalY.toString(),
+            point.scaledX.toFixed(2),
+            point.scaledY.toFixed(2)
+        ];
+        
+        xPos = startX + 2;
+        rowData.forEach((cell, i) => {
+            pdf.text(cell, xPos, yPos);
+            xPos += colWidths[i];
+        });
+        yPos += 6;
+    });
+    
+    // Add regression info
+    yPos += 10;
+    if (yPos > tablePageHeight - 30) {
+        pdf.addPage('a4', 'portrait');
+        yPos = tableMargin;
+    }
+    
+    const regression = calculateRegression(currentResults.scaledPoints);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(11);
+    pdf.text('Regression Analysis:', tableMargin, yPos);
+    yPos += 7;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Equation: y = ${regression.slope.toFixed(4)}x + ${regression.intercept.toFixed(4)}`, tableMargin, yPos);
+    yPos += 6;
+    pdf.text(`R² = ${regression.rSquared.toFixed(6)}`, tableMargin, yPos);
 }
