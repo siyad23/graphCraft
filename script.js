@@ -1811,6 +1811,10 @@ function addDataTableToPdf(pdf, graphTitle) {
     const tableMargin = 15;
     let yPos = tableMargin;
     
+    // Get column names
+    const { xName, yNames } = getColumnNames();
+    const yCount = currentResults.yColumnCount || 1;
+    
     // Title
     pdf.setFontSize(18);
     pdf.setFont('helvetica', 'bold');
@@ -1826,17 +1830,38 @@ function addDataTableToPdf(pdf, graphTitle) {
     pdf.text(`Y-Axis Scale: 1 square = ${currentResults.yScalePerSquare}`, tableMargin, yPos);
     yPos += 12;
     
-    // Table headers
-    const colWidths = [15, 35, 35, 45, 45];
-    const headers = ['#', 'Original X', 'Original Y', 'Grid X (sq)', 'Grid Y (sq)'];
+    // Build dynamic column widths and headers based on Y column count
+    const baseColWidth = 30;
+    const colWidths = [12, baseColWidth]; // # and Original X
+    const headers = ['#', `Orig ${xName}`];
+    
+    // Add Original Y columns
+    for (let i = 0; i < yCount; i++) {
+        const yColName = yNames[i] || `Y${i + 1}`;
+        colWidths.push(baseColWidth);
+        headers.push(`Orig ${yColName}`);
+    }
+    
+    // Add Grid X
+    colWidths.push(baseColWidth);
+    headers.push(`Grid ${xName}`);
+    
+    // Add Grid Y columns
+    for (let i = 0; i < yCount; i++) {
+        const yColName = yNames[i] || `Y${i + 1}`;
+        colWidths.push(baseColWidth);
+        headers.push(`Grid ${yColName}`);
+    }
+    
     const startX = tableMargin;
+    const totalWidth = colWidths.reduce((a, b) => a + b, 0);
     
     pdf.setFillColor(14, 165, 233);
-    pdf.rect(startX, yPos - 5, colWidths.reduce((a, b) => a + b, 0), 8, 'F');
+    pdf.rect(startX, yPos - 5, totalWidth, 8, 'F');
     
     pdf.setTextColor(255, 255, 255);
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(10);
+    pdf.setFontSize(8);
     let xPos = startX + 2;
     headers.forEach((header, i) => {
         pdf.text(header, xPos, yPos);
@@ -1847,7 +1872,7 @@ function addDataTableToPdf(pdf, graphTitle) {
     // Table rows
     pdf.setTextColor(0, 0, 0);
     pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(9);
+    pdf.setFontSize(8);
     
     currentResults.scaledPoints.forEach((point, index) => {
         if (yPos > tablePageHeight - 20) {
@@ -1857,16 +1882,24 @@ function addDataTableToPdf(pdf, graphTitle) {
         
         if (index % 2 === 0) {
             pdf.setFillColor(241, 245, 249);
-            pdf.rect(startX, yPos - 4, colWidths.reduce((a, b) => a + b, 0), 6, 'F');
+            pdf.rect(startX, yPos - 4, totalWidth, 6, 'F');
         }
         
-        const rowData = [
-            (index + 1).toString(),
-            point.originalX.toString(),
-            point.originalY.toString(),
-            point.scaledX.toFixed(2),
-            point.scaledY.toFixed(2)
-        ];
+        // Build row data dynamically
+        const rowData = [(index + 1).toString(), point.originalX.toString()];
+        
+        // Original Y values
+        point.originalYValues.forEach(y => {
+            rowData.push(y !== null ? y.toString() : '-');
+        });
+        
+        // Grid X
+        rowData.push(point.scaledX.toFixed(2));
+        
+        // Grid Y values
+        point.scaledYValues.forEach(y => {
+            rowData.push(y !== null ? y.toFixed(2) : '-');
+        });
         
         xPos = startX + 2;
         rowData.forEach((cell, i) => {
@@ -1876,20 +1909,34 @@ function addDataTableToPdf(pdf, graphTitle) {
         yPos += 6;
     });
     
-    // Add regression info
+    // Add regression info for each Y series
     yPos += 10;
     if (yPos > tablePageHeight - 30) {
         pdf.addPage('a4', 'portrait');
         yPos = tableMargin;
     }
     
-    const regression = calculateRegression(currentResults.scaledPoints);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(11);
     pdf.text('Regression Analysis:', tableMargin, yPos);
     yPos += 7;
     pdf.setFont('helvetica', 'normal');
-    pdf.text(`Equation: y = ${regression.slope.toFixed(4)}x + ${regression.intercept.toFixed(4)}`, tableMargin, yPos);
-    yPos += 6;
-    pdf.text(`R² = ${regression.rSquared.toFixed(6)}`, tableMargin, yPos);
+    
+    for (let yIdx = 0; yIdx < yCount; yIdx++) {
+        const yColName = yNames[yIdx] || `Y${yIdx + 1}`;
+        const regression = calculateRegression(currentResults.scaledPoints, yIdx);
+        
+        if (yCount > 1) {
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(`${yColName}:`, tableMargin, yPos);
+            pdf.setFont('helvetica', 'normal');
+            yPos += 6;
+        }
+        
+        const interceptSign = regression.intercept >= 0 ? '+' : '-';
+        pdf.text(`Equation: y = ${regression.slope.toFixed(4)}x ${interceptSign} ${Math.abs(regression.intercept).toFixed(4)}`, tableMargin + (yCount > 1 ? 5 : 0), yPos);
+        yPos += 6;
+        pdf.text(`R² = ${regression.rSquared.toFixed(6)}`, tableMargin + (yCount > 1 ? 5 : 0), yPos);
+        yPos += 8;
+    }
 }
