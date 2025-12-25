@@ -126,16 +126,6 @@ h1 {
     border-color: rgba(255, 255, 255, 0.8);
 }
 
-.header-label-y {
-    font-weight: 600;
-}
-
-th .subscript {
-    font-size: 0.7em;
-    vertical-align: sub;
-    margin-left: 1px;
-}
-
 /* Y Column Controls */
 .y-column-controls {
     display: flex;

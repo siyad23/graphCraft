@@ -246,7 +246,10 @@ function getColumnNames() {
     const xInput = document.querySelector('#tableHeader .header-input-x');
     const yInputs = document.querySelectorAll('#tableHeader .header-input-y');
     const xName = xInput?.value.trim() || 'X';
-    const yNames = Array.from(yInputs).map((input, i) => input?.value.trim() || `Y${i + 1}`);
+    const yNames = Array.from(yInputs).map((input, i) => {
+        const val = input?.value.trim();
+        return val && val.length > 0 ? val : `Y${i + 1}`;
+    });
     return { xName, yNames };
 }
 
@@ -263,9 +266,10 @@ function updateTableHeaders() {
     let html = '<th>#</th>';
     html += `<th><input type="text" class="header-input header-input-x" value="${currentXValue}" placeholder="X" maxlength="15"></th>`;
     for (let i = 1; i <= yColumnCount; i++) {
-        // Use existing value if available, otherwise default to Y{index}
+        // Use existing value if available and not empty, otherwise default to Y{index}
         const defaultValue = `Y${i}`;
-        const currentValue = currentYValues[i - 1] || defaultValue;
+        const existingValue = currentYValues[i - 1];
+        const currentValue = (existingValue && existingValue.trim().length > 0) ? existingValue : defaultValue;
         html += `<th><input type="text" class="header-input header-input-y" data-y-index="${i}" value="${currentValue}" placeholder="Y${i}" maxlength="15"></th>`;
     }
     html += '<th></th>';
@@ -808,16 +812,16 @@ function displayResults(results) {
     
     // Update scaled coordinates table header with custom column names
     const scaledTableHeader = document.getElementById('scaledTableHeader');
-    const { xName, yName } = getColumnNames();
+    const { xName, yNames } = getColumnNames();
     let headerHtml = `<th>#</th><th>Original ${xName}</th>`;
     for (let i = 1; i <= results.yColumnCount; i++) {
-        const subscript = getSubscript(i);
-        headerHtml += `<th>Original ${yName}${subscript}</th>`;
+        const yColName = yNames[i - 1] || `Y${i}`;
+        headerHtml += `<th>Original ${yColName}</th>`;
     }
     headerHtml += `<th>Grid ${xName}</th>`;
     for (let i = 1; i <= results.yColumnCount; i++) {
-        const subscript = getSubscript(i);
-        headerHtml += `<th>Grid ${yName}${subscript}</th>`;
+        const yColName = yNames[i - 1] || `Y${i}`;
+        headerHtml += `<th>Grid ${yColName}</th>`;
     }
     scaledTableHeader.innerHTML = headerHtml;
     
@@ -1289,6 +1293,9 @@ function drawGraphToCanvas(canvas, ctx, results, scale) {
     const graphTitle = document.getElementById('graphTitle')?.value || '';
     const xAxisTitle = document.getElementById('xAxisTitle')?.value || '';
     const yAxisTitle = document.getElementById('yAxisTitle')?.value || '';
+    
+    // Get custom column names
+    const { xName, yNames } = getColumnNames();
     
     // Clear canvas with subtle gradient background (Desmos-like)
     const bgGradient = ctx.createLinearGradient(0, 0, canvasWidth, canvasHeight);
