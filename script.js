@@ -32,11 +32,14 @@ function roundRect(ctx, x, y, width, height, radius) {
 
 // Save data to localStorage
 function saveToCache() {
+    const { xName, yNames } = getColumnNames();
     const data = {
         gridWidth: document.getElementById('gridWidth').value,
         gridHeight: document.getElementById('gridHeight').value,
         axisInterval: document.getElementById('axisInterval').value,
         yColumnCount: yColumnCount,
+        xColumnName: xName,
+        yColumnNames: yNames,
         graphTitle: document.getElementById('graphTitle')?.value || '',
         xAxisTitle: document.getElementById('xAxisTitle')?.value || '',
         yAxisTitle: document.getElementById('yAxisTitle')?.value || '',
@@ -72,12 +75,31 @@ function loadFromCache() {
             if (data.gridHeight) document.getElementById('gridHeight').value = data.gridHeight;
             if (data.axisInterval) document.getElementById('axisInterval').value = data.axisInterval;
             
-            // Restore Y column count
+            // Restore Y column count first, then update headers with column names
             if (data.yColumnCount) {
                 yColumnCount = data.yColumnCount;
                 updateYColumnCount();
-                updateTableHeaders();
             }
+            
+            // Build headers first, then set column names
+            updateTableHeaders();
+            
+            // Restore column names in header inputs
+            if (data.xColumnName) {
+                const xInput = document.querySelector('.header-input-x');
+                if (xInput) xInput.value = data.xColumnName;
+            }
+            // Restore Y column names (support both old single yColumnName and new yColumnNames array)
+            const yInputs = document.querySelectorAll('.header-input-y');
+            if (data.yColumnNames && Array.isArray(data.yColumnNames)) {
+                yInputs.forEach((input, i) => {
+                    // Only restore if it's a custom name (not old "Y" default)
+                    if (data.yColumnNames[i] && data.yColumnNames[i] !== 'Y') {
+                        input.value = data.yColumnNames[i];
+                    }
+                });
+            }
+            // Legacy yColumnName is ignored - use new Y1, Y2, Y3 defaults
             
             // Restore rows
             if (data.rows && data.rows.length > 0) {
@@ -96,6 +118,7 @@ function loadFromCache() {
                 });
             } else {
                 // No cached rows, initialize with empty rows
+                updateTableHeaders();
                 initializeTable();
             }
             
@@ -111,10 +134,12 @@ function loadFromCache() {
             
         } catch (e) {
             console.error('Error loading cached data:', e);
+            updateTableHeaders();
             initializeTable();
         }
     } else {
         // No cached data, initialize with empty rows
+        updateTableHeaders();
         initializeTable();
     }
 }
@@ -216,17 +241,51 @@ function updateYColumnCount() {
     document.getElementById('yColumnCount').textContent = yColumnCount;
 }
 
-// Update table headers for Y columns
+// Get custom column names from header inputs
+function getColumnNames() {
+    const xInput = document.querySelector('#tableHeader .header-input-x');
+    const yInputs = document.querySelectorAll('#tableHeader .header-input-y');
+    const xName = xInput?.value.trim() || 'X';
+    const yNames = Array.from(yInputs).map((input, i) => input?.value.trim() || `Y${i + 1}`);
+    return { xName, yNames };
+}
+
+// Update table headers for Y columns with editable inputs
 function updateTableHeaders() {
     const headerRow = document.getElementById('tableHeader');
-    // Build header: # | X | Y₁ | Y₂ | ... | delete button
-    let html = '<th>#</th><th>X</th>';
+    // Get current values before rebuilding
+    const currentXInput = headerRow.querySelector('.header-input-x');
+    const currentYInputs = headerRow.querySelectorAll('.header-input-y');
+    const currentXValue = currentXInput?.value || 'X';
+    const currentYValues = Array.from(currentYInputs).map(input => input?.value);
+    
+    // Build header: # | X (input) | Y1 (input) | Y2 (input) | ... | delete button
+    let html = '<th>#</th>';
+    html += `<th><input type="text" class="header-input header-input-x" value="${currentXValue}" placeholder="X" maxlength="15"></th>`;
     for (let i = 1; i <= yColumnCount; i++) {
-        const subscript = getSubscript(i);
-        html += `<th>Y${subscript}</th>`;
+        // Use existing value if available, otherwise default to Y{index}
+        const defaultValue = `Y${i}`;
+        const currentValue = currentYValues[i - 1] || defaultValue;
+        html += `<th><input type="text" class="header-input header-input-y" data-y-index="${i}" value="${currentValue}" placeholder="Y${i}" maxlength="15"></th>`;
     }
     html += '<th></th>';
     headerRow.innerHTML = html;
+    
+    // Add event listeners to header inputs
+    const xHeaderInput = headerRow.querySelector('.header-input-x');
+    const yHeaderInputs = headerRow.querySelectorAll('.header-input-y');
+    
+    if (xHeaderInput) {
+        xHeaderInput.addEventListener('input', () => {
+            saveToCache();
+        });
+    }
+    
+    yHeaderInputs.forEach(input => {
+        input.addEventListener('input', () => {
+            saveToCache();
+        });
+    });
 }
 
 // Update all existing rows to match Y column count
@@ -407,6 +466,16 @@ function clearAll() {
     document.getElementById('dataBody').innerHTML = '';
     document.getElementById('resultsSection').style.display = 'none';
     rowCounter = 0;
+    yColumnCount = 1;
+    updateYColumnCount();
+    updateTableHeaders();
+    
+    // Reset header inputs to defaults
+    const xInput = document.querySelector('.header-input-x');
+    const yInput = document.querySelector('.header-input-y');
+    if (xInput) xInput.value = 'X';
+    if (yInput) yInput.value = 'Y';
+    
     initializeTable();
     clearCache();
 }
@@ -737,17 +806,18 @@ function displayResults(results) {
         yAxisBody.appendChild(row);
     }
     
-    // Update scaled coordinates table header
+    // Update scaled coordinates table header with custom column names
     const scaledTableHeader = document.getElementById('scaledTableHeader');
-    let headerHtml = '<th>#</th><th>Original X</th>';
+    const { xName, yName } = getColumnNames();
+    let headerHtml = `<th>#</th><th>Original ${xName}</th>`;
     for (let i = 1; i <= results.yColumnCount; i++) {
         const subscript = getSubscript(i);
-        headerHtml += `<th>Original Y${subscript}</th>`;
+        headerHtml += `<th>Original ${yName}${subscript}</th>`;
     }
-    headerHtml += '<th>Grid X</th>';
+    headerHtml += `<th>Grid ${xName}</th>`;
     for (let i = 1; i <= results.yColumnCount; i++) {
         const subscript = getSubscript(i);
-        headerHtml += `<th>Grid Y${subscript}</th>`;
+        headerHtml += `<th>Grid ${yName}${subscript}</th>`;
     }
     scaledTableHeader.innerHTML = headerHtml;
     
@@ -836,6 +906,9 @@ function drawGraph(results) {
     const xAxisTitle = document.getElementById('xAxisTitle')?.value || '';
     const yAxisTitle = document.getElementById('yAxisTitle')?.value || '';
     
+    // Get custom column names
+    const { xName, yNames } = getColumnNames();
+    
     const ctx = canvas.getContext('2d');
     
     // High resolution canvas with zoom support
@@ -909,7 +982,7 @@ function drawGraph(results) {
     
     for (let yIdx = 0; yIdx < yCount; yIdx++) {
         const regression = calculateRegression(results.scaledPoints, yIdx);
-        const subscript = getSubscript(yIdx + 1);
+        const yColName = yNames[yIdx] || `Y${yIdx + 1}`;
         const colorIdx = yIdx % regressionColors.length;
         const color = regressionColors[colorIdx];
         
@@ -922,7 +995,7 @@ function drawGraph(results) {
         
         regressionHtml += `
             <div class="regression-item" style="border-left: 4px solid ${color}; padding-left: 10px; margin-bottom: 8px;">
-                <span class="regression-label" style="color: ${color}; font-weight: bold;">Y${subscript}:</span>
+                <span class="regression-label" style="color: ${color}; font-weight: bold;">${yColName}:</span>
                 <span class="regression-equation">y = ${slopeDisplay}x ${interceptDisplay}</span>
                 <span class="regression-label">R² =</span>
                 <span class="regression-r2">${r2Display}</span>
@@ -1170,8 +1243,8 @@ function drawGraph(results) {
     for (let yIdx = 0; yIdx < yCount; yIdx++) {
         const colorIdx = yIdx % seriesColors.length;
         const colors = seriesColors[colorIdx];
-        const subscript = getSubscript(yIdx + 1);
-        const seriesName = yCount > 1 ? `Y${subscript} Data` : 'Data Points';
+        const yColName = yNames[yIdx] || `Y${yIdx + 1}`;
+        const seriesName = `${yColName} Data`;
         
         // Data points legend
         ctx.fillStyle = colors.fill;
@@ -1194,7 +1267,7 @@ function drawGraph(results) {
         ctx.lineTo(legendX + 7 * currentZoom, legendY + legendOffset);
         ctx.stroke();
         ctx.fillStyle = '#475569';
-        const regName = yCount > 1 ? `Y${subscript} Regression` : 'Regression Line';
+        const regName = `${yColName} Regression`;
         ctx.fillText(regName, legendX + 14 * currentZoom, legendY + legendOffset + 4 * currentZoom);
         legendOffset += legendItemHeight;
     }
@@ -1472,8 +1545,8 @@ function drawGraphToCanvas(canvas, ctx, results, scale) {
     for (let yIdx = 0; yIdx < yCount; yIdx++) {
         const colorIdx = yIdx % seriesColors.length;
         const colors = seriesColors[colorIdx];
-        const subscript = getSubscript(yIdx + 1);
-        const seriesName = yCount > 1 ? `Y${subscript} Data` : 'Data Points';
+        const yColName = yNames[yIdx] || `Y${yIdx + 1}`;
+        const seriesName = `${yColName} Data`;
         
         ctx.fillStyle = colors.fill;
         ctx.beginPath();
@@ -1490,7 +1563,7 @@ function drawGraphToCanvas(canvas, ctx, results, scale) {
         ctx.lineTo(legendX + 8 * scale, legendY + legendOffset);
         ctx.stroke();
         ctx.fillStyle = '#333';
-        const regName = yCount > 1 ? `Y${subscript} Regression` : 'Regression Line';
+        const regName = `${yColName} Regression`;
         ctx.fillText(regName, legendX + 15 * scale, legendY + legendOffset + 5 * scale);
         legendOffset += legendItemHeight;
     }

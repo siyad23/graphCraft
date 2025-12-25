@@ -102,6 +102,40 @@ h1 {
     gap: 15px;
 }
 
+/* Header Input Styling */
+.header-input {
+    background: rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: white;
+    text-align: center;
+    width: 60px;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.header-input::placeholder {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.header-input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.4);
+    border-color: rgba(255, 255, 255, 0.8);
+}
+
+.header-label-y {
+    font-weight: 600;
+}
+
+th .subscript {
+    font-size: 0.7em;
+    vertical-align: sub;
+    margin-left: 1px;
+}
+
 /* Y Column Controls */
 .y-column-controls {
     display: flex;
