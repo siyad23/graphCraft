@@ -1,6 +1,6 @@
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
-    initializeTable();
+    loadFromCache();
     setupEventListeners();
     setupGraphControls();
 });
@@ -8,6 +8,106 @@ document.addEventListener('DOMContentLoaded', function() {
 // Graph zoom state
 let currentZoom = 1;
 let currentResults = null;
+
+// Y column count
+let yColumnCount = 1;
+
+// LocalStorage key
+const CACHE_KEY = 'graphcraft_data';
+
+// Save data to localStorage
+function saveToCache() {
+    const data = {
+        gridWidth: document.getElementById('gridWidth').value,
+        gridHeight: document.getElementById('gridHeight').value,
+        axisInterval: document.getElementById('axisInterval').value,
+        yColumnCount: yColumnCount,
+        graphTitle: document.getElementById('graphTitle')?.value || '',
+        xAxisTitle: document.getElementById('xAxisTitle')?.value || '',
+        yAxisTitle: document.getElementById('yAxisTitle')?.value || '',
+        rows: []
+    };
+    
+    // Save all row data
+    const rows = document.querySelectorAll('#dataBody tr');
+    rows.forEach(row => {
+        const xInput = row.querySelector('.x-input');
+        const yInputs = row.querySelectorAll('.y-input');
+        
+        const rowData = {
+            x: xInput?.value || '',
+            yValues: Array.from(yInputs).map(input => input.value || '')
+        };
+        data.rows.push(rowData);
+    });
+    
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+}
+
+// Load data from localStorage
+function loadFromCache() {
+    const cached = localStorage.getItem(CACHE_KEY);
+    
+    if (cached) {
+        try {
+            const data = JSON.parse(cached);
+            
+            // Restore grid dimensions
+            if (data.gridWidth) document.getElementById('gridWidth').value = data.gridWidth;
+            if (data.gridHeight) document.getElementById('gridHeight').value = data.gridHeight;
+            if (data.axisInterval) document.getElementById('axisInterval').value = data.axisInterval;
+            
+            // Restore Y column count
+            if (data.yColumnCount) {
+                yColumnCount = data.yColumnCount;
+                updateYColumnCount();
+                updateTableHeaders();
+            }
+            
+            // Restore rows
+            if (data.rows && data.rows.length > 0) {
+                data.rows.forEach(rowData => {
+                    addRow();
+                    const tbody = document.getElementById('dataBody');
+                    const row = tbody.lastElementChild;
+                    
+                    const xInput = row.querySelector('.x-input');
+                    if (xInput && rowData.x) xInput.value = rowData.x;
+                    
+                    const yInputs = row.querySelectorAll('.y-input');
+                    rowData.yValues.forEach((yVal, idx) => {
+                        if (yInputs[idx] && yVal) yInputs[idx].value = yVal;
+                    });
+                });
+            } else {
+                // No cached rows, initialize with empty rows
+                initializeTable();
+            }
+            
+            // Restore graph titles (after a short delay to ensure elements exist)
+            setTimeout(() => {
+                if (data.graphTitle) document.getElementById('graphTitle').value = data.graphTitle;
+                if (data.xAxisTitle) document.getElementById('xAxisTitle').value = data.xAxisTitle;
+                if (data.yAxisTitle) document.getElementById('yAxisTitle').value = data.yAxisTitle;
+                
+                // Calculate and display results
+                calculateScaledCoordinates();
+            }, 100);
+            
+        } catch (e) {
+            console.error('Error loading cached data:', e);
+            initializeTable();
+        }
+    } else {
+        // No cached data, initialize with empty rows
+        initializeTable();
+    }
+}
+
+// Clear cache
+function clearCache() {
+    localStorage.removeItem(CACHE_KEY);
+}
 
 // Initialize with some empty rows
 function initializeTable() {
@@ -21,6 +121,7 @@ function setupEventListeners() {
     document.getElementById('addRowBtn').addEventListener('click', () => {
         addRow();
         calculateScaledCoordinates();
+        saveToCache();
         // Focus on the new row's X input
         const tbody = document.getElementById('dataBody');
         const lastRow = tbody.lastElementChild;
@@ -35,19 +136,170 @@ function setupEventListeners() {
             addRow();
         }
         calculateScaledCoordinates();
+        saveToCache();
     });
     
     document.getElementById('clearAllBtn').addEventListener('click', clearAll);
     
+    // Y column controls
+    document.getElementById('addYColBtn').addEventListener('click', addYColumn);
+    document.getElementById('removeYColBtn').addEventListener('click', removeYColumn);
+    
     // Real-time calculation on grid dimension changes
-    document.getElementById('gridWidth').addEventListener('input', calculateScaledCoordinates);
-    document.getElementById('gridHeight').addEventListener('input', calculateScaledCoordinates);
-    document.getElementById('axisInterval').addEventListener('input', calculateScaledCoordinates);
+    document.getElementById('gridWidth').addEventListener('input', () => {
+        calculateScaledCoordinates();
+        saveToCache();
+    });
+    document.getElementById('gridHeight').addEventListener('input', () => {
+        calculateScaledCoordinates();
+        saveToCache();
+    });
+    document.getElementById('axisInterval').addEventListener('input', () => {
+        calculateScaledCoordinates();
+        saveToCache();
+    });
     
     // Real-time update on title changes
-    document.getElementById('graphTitle').addEventListener('input', redrawGraphIfReady);
-    document.getElementById('xAxisTitle').addEventListener('input', redrawGraphIfReady);
-    document.getElementById('yAxisTitle').addEventListener('input', redrawGraphIfReady);
+    document.getElementById('graphTitle').addEventListener('input', () => {
+        redrawGraphIfReady();
+        saveToCache();
+    });
+    document.getElementById('xAxisTitle').addEventListener('input', () => {
+        redrawGraphIfReady();
+        saveToCache();
+    });
+    document.getElementById('yAxisTitle').addEventListener('input', () => {
+        redrawGraphIfReady();
+        saveToCache();
+    });
+}
+
+// Add a Y column
+function addYColumn() {
+    yColumnCount++;
+    updateYColumnCount();
+    updateTableHeaders();
+    updateAllRowsYColumns();
+    calculateScaledCoordinates();
+    saveToCache();
+}
+
+// Remove a Y column
+function removeYColumn() {
+    if (yColumnCount > 1) {
+        yColumnCount--;
+        updateYColumnCount();
+        updateTableHeaders();
+        updateAllRowsYColumns();
+        calculateScaledCoordinates();
+        saveToCache();
+    }
+}
+
+// Update Y column count display
+function updateYColumnCount() {
+    document.getElementById('yColumnCount').textContent = yColumnCount;
+}
+
+// Update table headers for Y columns
+function updateTableHeaders() {
+    const headerRow = document.getElementById('tableHeader');
+    // Build header: # | X | Y₁ | Y₂ | ... | delete button
+    let html = '<th>#</th><th>X</th>';
+    for (let i = 1; i <= yColumnCount; i++) {
+        const subscript = getSubscript(i);
+        html += `<th>Y${subscript}</th>`;
+    }
+    html += '<th></th>';
+    headerRow.innerHTML = html;
+}
+
+// Update all existing rows to match Y column count
+function updateAllRowsYColumns() {
+    const rows = document.querySelectorAll('#dataBody tr');
+    rows.forEach(row => {
+        const currentYInputs = row.querySelectorAll('.y-input');
+        const currentYCount = currentYInputs.length;
+        
+        // Get the delete button cell (last cell)
+        const deleteCell = row.lastElementChild;
+        
+        if (currentYCount < yColumnCount) {
+            // Add more Y columns
+            for (let i = currentYCount + 1; i <= yColumnCount; i++) {
+                const newCell = document.createElement('td');
+                const subscript = getSubscript(i);
+                newCell.innerHTML = `<input type="number" step="any" placeholder="Y${subscript}" class="y-input" data-y-index="${i}" inputmode="decimal">`;
+                row.insertBefore(newCell, deleteCell);
+                
+                // Add event listener
+                const newInput = newCell.querySelector('.y-input');
+                newInput.addEventListener('input', () => {
+                    calculateScaledCoordinates();
+                    saveToCache();
+                });
+                setupYInputKeydown(newInput, row);
+            }
+        } else if (currentYCount > yColumnCount) {
+            // Remove extra Y columns
+            for (let i = currentYCount; i > yColumnCount; i--) {
+                const yInputs = row.querySelectorAll('.y-input');
+                const lastYInput = yInputs[yInputs.length - 1];
+                lastYInput.closest('td').remove();
+            }
+        }
+        
+        // Update placeholders and data-y-index
+        const yInputs = row.querySelectorAll('.y-input');
+        yInputs.forEach((input, idx) => {
+            const subscript = getSubscript(idx + 1);
+            input.placeholder = `Y${subscript}`;
+            input.dataset.yIndex = idx + 1;
+        });
+    });
+}
+
+// Setup keydown handler for Y inputs
+function setupYInputKeydown(yInput, row) {
+    yInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            const yIndex = parseInt(yInput.dataset.yIndex);
+            
+            // Check if there's a next Y input in the same row
+            if (yIndex < yColumnCount) {
+                const nextYInput = row.querySelector(`.y-input[data-y-index="${yIndex + 1}"]`);
+                if (nextYInput) {
+                    nextYInput.focus();
+                    nextYInput.select();
+                    return;
+                }
+            }
+            
+            // Move to next row's X input
+            const tbody = document.getElementById('dataBody');
+            const nextRow = row.nextElementSibling;
+            if (nextRow) {
+                const nextXInput = nextRow.querySelector('.x-input');
+                if (nextXInput) {
+                    nextXInput.focus();
+                    nextXInput.select();
+                }
+            } else {
+                addRow();
+                calculateScaledCoordinates();
+                const newRow = tbody.lastElementChild;
+                const newXInput = newRow.querySelector('.x-input');
+                newXInput.focus();
+            }
+        }
+    });
+}
+
+// Get subscript characters for numbers
+function getSubscript(num) {
+    const subscripts = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'];
+    return String(num).split('').map(d => subscripts[parseInt(d)]).join('');
 }
 
 // Redraw graph if data is ready
@@ -66,10 +318,17 @@ function addRow() {
     const row = document.createElement('tr');
     rowCounter++;
     
+    // Build Y columns HTML
+    let yColumnsHtml = '';
+    for (let i = 1; i <= yColumnCount; i++) {
+        const subscript = getSubscript(i);
+        yColumnsHtml += `<td><input type="number" step="any" placeholder="Y${subscript}" class="y-input" data-y-index="${i}" inputmode="decimal"></td>`;
+    }
+    
     row.innerHTML = `
         <td>${rowCounter}</td>
         <td><input type="number" step="any" placeholder="X" class="x-input" inputmode="decimal"></td>
-        <td><input type="number" step="any" placeholder="Y" class="y-input" inputmode="decimal"></td>
+        ${yColumnsHtml}
         <td><button class="btn btn-danger btn-small delete-btn">✕</button></td>
     `;
     
@@ -77,38 +336,29 @@ function addRow() {
     
     // Add event listeners to new inputs for real-time calculation
     const xInput = row.querySelector('.x-input');
-    const yInput = row.querySelector('.y-input');
+    const yInputs = row.querySelectorAll('.y-input');
     const deleteBtn = row.querySelector('.delete-btn');
     
-    xInput.addEventListener('input', calculateScaledCoordinates);
-    yInput.addEventListener('input', calculateScaledCoordinates);
+    xInput.addEventListener('input', () => {
+        calculateScaledCoordinates();
+        saveToCache();
+    });
+    yInputs.forEach(yInput => {
+        yInput.addEventListener('input', () => {
+            calculateScaledCoordinates();
+            saveToCache();
+        });
+        setupYInputKeydown(yInput, row);
+    });
     
-    // Auto-advance to Y input after entering X
+    // Auto-advance to first Y input after entering X
     xInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' || e.key === 'Tab') {
             e.preventDefault();
-            yInput.focus();
-            yInput.select();
-        }
-    });
-    
-    // Auto-advance to next row's X input after entering Y
-    yInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const nextRow = row.nextElementSibling;
-            if (nextRow) {
-                const nextXInput = nextRow.querySelector('.x-input');
-                if (nextXInput) {
-                    nextXInput.focus();
-                    nextXInput.select();
-                }
-            } else {
-                addRow();
-                calculateScaledCoordinates();
-                const newRow = tbody.lastElementChild;
-                const newXInput = newRow.querySelector('.x-input');
-                newXInput.focus();
+            const firstYInput = row.querySelector('.y-input');
+            if (firstYInput) {
+                firstYInput.focus();
+                firstYInput.select();
             }
         }
     });
@@ -126,6 +376,7 @@ function deleteRow(button) {
     row.remove();
     updateRowNumbers();
     calculateScaledCoordinates();
+    saveToCache();
 }
 
 // Update row numbers after deletion
@@ -142,6 +393,7 @@ function clearAll() {
     document.getElementById('resultsSection').style.display = 'none';
     rowCounter = 0;
     initializeTable();
+    clearCache();
 }
 
 // Get all data points from the table
@@ -151,13 +403,20 @@ function getDataPoints() {
     
     rows.forEach((row, index) => {
         const xInput = row.querySelector('.x-input');
-        const yInput = row.querySelector('.y-input');
+        const yInputs = row.querySelectorAll('.y-input');
         
         const x = parseFloat(xInput.value);
-        const y = parseFloat(yInput.value);
         
-        if (!isNaN(x) && !isNaN(y)) {
-            dataPoints.push({ x, y, index: index + 1 });
+        // Collect Y values
+        const yValues = [];
+        yInputs.forEach(yInput => {
+            const y = parseFloat(yInput.value);
+            yValues.push(isNaN(y) ? null : y);
+        });
+        
+        // Only include row if X is valid and at least one Y is valid
+        if (!isNaN(x) && yValues.some(y => y !== null)) {
+            dataPoints.push({ x, yValues, index: index + 1 });
         }
     });
     
@@ -178,14 +437,21 @@ function calculateScaledCoordinates() {
     const gridHeight = parseInt(document.getElementById('gridHeight').value) || 55;
     const axisInterval = parseInt(document.getElementById('axisInterval').value) || 5;
     
-    // Find min and max values
+    // Find min and max values for X
     const xValues = dataPoints.map(p => p.x);
-    const yValues = dataPoints.map(p => p.y);
-    
     const xMin = Math.min(...xValues);
     const xMax = Math.max(...xValues);
-    const yMin = Math.min(...yValues);
-    const yMax = Math.max(...yValues);
+    
+    // Find min and max values for all Y series combined
+    let allYValues = [];
+    dataPoints.forEach(p => {
+        p.yValues.forEach(y => {
+            if (y !== null) allYValues.push(y);
+        });
+    });
+    
+    const yMin = Math.min(...allYValues);
+    const yMax = Math.max(...allYValues);
     
     // Calculate ranges from 0 to max
     const xRange = xMax;
@@ -207,14 +473,19 @@ function calculateScaledCoordinates() {
     // Calculate scaled coordinates
     const scaledPoints = dataPoints.map(point => {
         const scaledX = (point.x - xStart) / xScalePerSquare;
-        const scaledY = (point.y - yStart) / yScalePerSquare;
+        
+        // Scale each Y value
+        const scaledYValues = point.yValues.map(y => {
+            if (y === null) return null;
+            return Math.round((y - yStart) / yScalePerSquare);
+        });
         
         return {
             index: point.index,
             originalX: point.x,
-            originalY: point.y,
-            scaledX: Math.round(scaledX),  // Round to nearest integer (x.5+ rounds up)
-            scaledY: Math.round(scaledY)   // Round to nearest integer (x.5+ rounds up)
+            originalYValues: point.yValues,
+            scaledX: Math.round(scaledX),
+            scaledYValues: scaledYValues
         };
     });
     
@@ -233,7 +504,8 @@ function calculateScaledCoordinates() {
         scaledPoints,
         axisInterval,
         gridWidth,
-        gridHeight
+        gridHeight,
+        yColumnCount
     });
 }
 
@@ -450,19 +722,42 @@ function displayResults(results) {
         yAxisBody.appendChild(row);
     }
     
-    // Update scaled coordinates table
+    // Update scaled coordinates table header
+    const scaledTableHeader = document.getElementById('scaledTableHeader');
+    let headerHtml = '<th>#</th><th>Original X</th>';
+    for (let i = 1; i <= results.yColumnCount; i++) {
+        const subscript = getSubscript(i);
+        headerHtml += `<th>Original Y${subscript}</th>`;
+    }
+    headerHtml += '<th>Grid X</th>';
+    for (let i = 1; i <= results.yColumnCount; i++) {
+        const subscript = getSubscript(i);
+        headerHtml += `<th>Grid Y${subscript}</th>`;
+    }
+    scaledTableHeader.innerHTML = headerHtml;
+    
+    // Update scaled coordinates table body
     const scaledBody = document.getElementById('scaledBody');
     scaledBody.innerHTML = '';
     
     results.scaledPoints.forEach(point => {
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${point.index}</td>
-            <td>${point.originalX}</td>
-            <td>${point.originalY}</td>
-            <td>${point.scaledX}</td>
-            <td>${point.scaledY}</td>
-        `;
+        let rowHtml = `<td>${point.index}</td><td>${point.originalX}</td>`;
+        
+        // Original Y values
+        point.originalYValues.forEach(y => {
+            rowHtml += `<td>${y !== null ? y : '-'}</td>`;
+        });
+        
+        // Grid X
+        rowHtml += `<td class="grid-coord">${point.scaledX}</td>`;
+        
+        // Grid Y values
+        point.scaledYValues.forEach(y => {
+            rowHtml += `<td class="grid-coord">${y !== null ? y : '-'}</td>`;
+        });
+        
+        row.innerHTML = rowHtml;
         scaledBody.appendChild(row);
     });
     
@@ -473,19 +768,22 @@ function displayResults(results) {
     resultsSection.style.display = 'block';
 }
 
-// Calculate linear regression
-function calculateRegression(points) {
-    const n = points.length;
+// Calculate linear regression for a single Y series
+function calculateRegression(points, yIndex = 0) {
+    // Filter points that have a valid Y value at this index
+    const validPoints = points.filter(p => p.originalYValues && p.originalYValues[yIndex] !== null);
+    const n = validPoints.length;
     if (n < 2) return { slope: 0, intercept: 0, rSquared: 0 };
     
     let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
     
-    for (const point of points) {
+    for (const point of validPoints) {
+        const y = point.originalYValues[yIndex];
         sumX += point.originalX;
-        sumY += point.originalY;
-        sumXY += point.originalX * point.originalY;
+        sumY += y;
+        sumXY += point.originalX * y;
         sumX2 += point.originalX * point.originalX;
-        sumY2 += point.originalY * point.originalY;
+        sumY2 += y * y;
     }
     
     const denominator = n * sumX2 - sumX * sumX;
@@ -498,10 +796,11 @@ function calculateRegression(points) {
     const meanY = sumY / n;
     let ssTotal = 0, ssResidual = 0;
     
-    for (const point of points) {
+    for (const point of validPoints) {
+        const y = point.originalYValues[yIndex];
         const predicted = slope * point.originalX + intercept;
-        ssTotal += (point.originalY - meanY) ** 2;
-        ssResidual += (point.originalY - predicted) ** 2;
+        ssTotal += (y - meanY) ** 2;
+        ssResidual += (y - predicted) ** 2;
     }
     
     const rSquared = ssTotal === 0 ? 1 : 1 - (ssResidual / ssTotal);
@@ -559,19 +858,49 @@ function drawGraph(results) {
         ctx.fillText(graphTitle, canvasWidth / 2, 35 * currentZoom);
     }
     
-    // Calculate regression
-    const regression = calculateRegression(results.scaledPoints);
+    // Colors for multiple Y series
+    const seriesColors = [
+        { fill: '#0ea5e9', stroke: '#0284c7' },  // Blue
+        { fill: '#f97316', stroke: '#ea580c' },  // Orange
+        { fill: '#22c55e', stroke: '#16a34a' },  // Green
+        { fill: '#a855f7', stroke: '#9333ea' },  // Purple
+        { fill: '#ec4899', stroke: '#db2777' },  // Pink
+        { fill: '#eab308', stroke: '#ca8a04' },  // Yellow
+        { fill: '#14b8a6', stroke: '#0d9488' },  // Teal
+        { fill: '#ef4444', stroke: '#dc2626' },  // Red
+    ];
     
-    // Display regression equation
-    const slopeDisplay = isNaN(regression.slope) ? '0' : regression.slope.toFixed(4);
-    const interceptVal = isNaN(regression.intercept) ? 0 : regression.intercept;
-    const interceptDisplay = interceptVal >= 0 
-        ? `+ ${interceptVal.toFixed(4)}` 
-        : `- ${Math.abs(interceptVal).toFixed(4)}`;
-    document.getElementById('regressionEquation').textContent = 
-        `y = ${slopeDisplay}x ${interceptDisplay}`;
-    document.getElementById('rSquared').textContent = 
-        isNaN(regression.rSquared) ? '-' : regression.rSquared.toFixed(4);
+    const regressionColors = ['#e74c3c', '#2ecc71', '#9b59b6', '#f39c12', '#1abc9c', '#e91e63', '#00bcd4', '#ff5722'];
+    
+    // Display regression equations for all Y series
+    const regressionContainer = document.getElementById('regressionContainer');
+    const yCount = results.yColumnCount || 1;
+    let regressionHtml = '';
+    
+    for (let yIdx = 0; yIdx < yCount; yIdx++) {
+        const regression = calculateRegression(results.scaledPoints, yIdx);
+        const subscript = getSubscript(yIdx + 1);
+        const colorIdx = yIdx % regressionColors.length;
+        const color = regressionColors[colorIdx];
+        
+        const slopeDisplay = isNaN(regression.slope) ? '0' : regression.slope.toFixed(4);
+        const interceptVal = isNaN(regression.intercept) ? 0 : regression.intercept;
+        const interceptDisplay = interceptVal >= 0 
+            ? `+ ${interceptVal.toFixed(4)}` 
+            : `- ${Math.abs(interceptVal).toFixed(4)}`;
+        const r2Display = isNaN(regression.rSquared) ? '-' : regression.rSquared.toFixed(4);
+        
+        regressionHtml += `
+            <div class="regression-item" style="border-left: 4px solid ${color}; padding-left: 10px; margin-bottom: 8px;">
+                <span class="regression-label" style="color: ${color}; font-weight: bold;">Y${subscript}:</span>
+                <span class="regression-equation">y = ${slopeDisplay}x ${interceptDisplay}</span>
+                <span class="regression-label">R² =</span>
+                <span class="regression-r2">${r2Display}</span>
+            </div>
+        `;
+    }
+    
+    regressionContainer.innerHTML = regressionHtml;
     
     // Calculate scale for canvas
     const maxGridX = results.gridWidth;
@@ -668,50 +997,61 @@ function drawGraph(results) {
         ctx.restore();
     }
     
-    // Draw regression line
-    ctx.strokeStyle = '#e74c3c';
-    ctx.lineWidth = 2.5 * currentZoom;
-    ctx.setLineDash([8 * currentZoom, 8 * currentZoom]);
-    
-    // Find line endpoints using original data regression
-    const origRegression = calculateRegression(results.scaledPoints.map(p => ({
-        originalX: p.originalX,
-        originalY: p.originalY
-    })));
-    
-    const x1 = 0;
-    const y1 = origRegression.intercept;
-    const x2 = results.xMax * 1.1;
-    const y2 = origRegression.slope * x2 + origRegression.intercept;
-    
-    // Convert to grid coordinates
-    const gridX1 = x1 / results.xScalePerSquare;
-    const gridY1 = y1 / results.yScalePerSquare;
-    const gridX2 = x2 / results.xScalePerSquare;
-    const gridY2 = y2 / results.yScalePerSquare;
-    
-    ctx.beginPath();
-    ctx.moveTo(toCanvasX(gridX1), toCanvasY(gridY1));
-    ctx.lineTo(toCanvasX(gridX2), toCanvasY(gridY2));
-    ctx.stroke();
+    // Draw regression line for each Y series
+    for (let yIdx = 0; yIdx < yCount; yIdx++) {
+        const colorIdx = yIdx % regressionColors.length;
+        ctx.strokeStyle = regressionColors[colorIdx];
+        ctx.lineWidth = 2.5 * currentZoom;
+        ctx.setLineDash([8 * currentZoom, 8 * currentZoom]);
+        
+        // Calculate regression for this Y series
+        const seriesRegression = calculateRegression(results.scaledPoints, yIdx);
+        
+        const x1 = 0;
+        const y1 = seriesRegression.intercept;
+        const x2 = results.xMax * 1.1;
+        const y2 = seriesRegression.slope * x2 + seriesRegression.intercept;
+        
+        // Convert to grid coordinates
+        const gridX1 = x1 / results.xScalePerSquare;
+        const gridY1 = y1 / results.yScalePerSquare;
+        const gridX2 = x2 / results.xScalePerSquare;
+        const gridY2 = y2 / results.yScalePerSquare;
+        
+        ctx.beginPath();
+        ctx.moveTo(toCanvasX(gridX1), toCanvasY(gridY1));
+        ctx.lineTo(toCanvasX(gridX2), toCanvasY(gridY2));
+        ctx.stroke();
+    }
     ctx.setLineDash([]);
     
-    // Draw data points
+    // Draw data points for each Y series
     const pointRadius = 8 * currentZoom;
-    ctx.fillStyle = '#0ea5e9';
-    results.scaledPoints.forEach(point => {
-        ctx.beginPath();
-        ctx.arc(toCanvasX(point.scaledX), toCanvasY(point.scaledY), pointRadius, 0, Math.PI * 2);
-        ctx.fill();
+    
+    for (let yIdx = 0; yIdx < yCount; yIdx++) {
+        const colorIdx = yIdx % seriesColors.length;
+        const colors = seriesColors[colorIdx];
         
-        // Draw point border
-        ctx.strokeStyle = '#0284c7';
-        ctx.lineWidth = 2 * currentZoom;
-        ctx.stroke();
-    });
+        results.scaledPoints.forEach(point => {
+            const scaledY = point.scaledYValues[yIdx];
+            if (scaledY === null) return;
+            
+            ctx.fillStyle = colors.fill;
+            ctx.beginPath();
+            ctx.arc(toCanvasX(point.scaledX), toCanvasY(scaledY), pointRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw point border
+            ctx.strokeStyle = colors.stroke;
+            ctx.lineWidth = 2 * currentZoom;
+            ctx.stroke();
+        });
+    }
     
     // Draw legend (fixed position in top-right)
-    const legendX = canvasWidth - 160 * currentZoom;
+    const legendItemHeight = 25 * currentZoom;
+    const legendHeight = (yCount * 2 + 1) * legendItemHeight;
+    const legendX = canvasWidth - 180 * currentZoom;
     const legendY = 25 * currentZoom;
     
     ctx.font = `${baseFontSize}px Arial`;
@@ -719,30 +1059,42 @@ function drawGraph(results) {
     
     // Legend background
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.fillRect(legendX - 15 * currentZoom, legendY - 15 * currentZoom, 170 * currentZoom, 55 * currentZoom);
+    ctx.fillRect(legendX - 15 * currentZoom, legendY - 15 * currentZoom, 190 * currentZoom, legendHeight);
     ctx.strokeStyle = '#ddd';
     ctx.lineWidth = 1;
-    ctx.strokeRect(legendX - 15 * currentZoom, legendY - 15 * currentZoom, 170 * currentZoom, 55 * currentZoom);
+    ctx.strokeRect(legendX - 15 * currentZoom, legendY - 15 * currentZoom, 190 * currentZoom, legendHeight);
     
-    // Data points legend
-    ctx.fillStyle = '#0ea5e9';
-    ctx.beginPath();
-    ctx.arc(legendX, legendY, 6 * currentZoom, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#333';
-    ctx.fillText('Data Points', legendX + 15 * currentZoom, legendY + 5 * currentZoom);
-    
-    // Regression line legend
-    ctx.strokeStyle = '#e74c3c';
-    ctx.lineWidth = 2 * currentZoom;
-    ctx.setLineDash([5 * currentZoom, 5 * currentZoom]);
-    ctx.beginPath();
-    ctx.moveTo(legendX - 8 * currentZoom, legendY + 25 * currentZoom);
-    ctx.lineTo(legendX + 8 * currentZoom, legendY + 25 * currentZoom);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#333';
-    ctx.fillText('Regression Line', legendX + 15 * currentZoom, legendY + 30 * currentZoom);
+    // Draw legend items for each series
+    let legendOffset = 0;
+    for (let yIdx = 0; yIdx < yCount; yIdx++) {
+        const colorIdx = yIdx % seriesColors.length;
+        const colors = seriesColors[colorIdx];
+        const subscript = getSubscript(yIdx + 1);
+        const seriesName = yCount > 1 ? `Y${subscript} Data` : 'Data Points';
+        
+        // Data points legend
+        ctx.fillStyle = colors.fill;
+        ctx.beginPath();
+        ctx.arc(legendX, legendY + legendOffset, 6 * currentZoom, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#333';
+        ctx.fillText(seriesName, legendX + 15 * currentZoom, legendY + legendOffset + 5 * currentZoom);
+        legendOffset += legendItemHeight;
+        
+        // Regression line legend
+        ctx.strokeStyle = regressionColors[colorIdx];
+        ctx.lineWidth = 2 * currentZoom;
+        ctx.setLineDash([5 * currentZoom, 5 * currentZoom]);
+        ctx.beginPath();
+        ctx.moveTo(legendX - 8 * currentZoom, legendY + legendOffset);
+        ctx.lineTo(legendX + 8 * currentZoom, legendY + legendOffset);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#333';
+        const regName = yCount > 1 ? `Y${subscript} Regression` : 'Regression Line';
+        ctx.fillText(regName, legendX + 15 * currentZoom, legendY + legendOffset + 5 * currentZoom);
+        legendOffset += legendItemHeight;
+    }
 }
 
 // Draw graph to a specific canvas (used for high-res PDF export)
@@ -874,75 +1226,112 @@ function drawGraphToCanvas(canvas, ctx, results, scale) {
         ctx.restore();
     }
     
-    // Draw regression line
-    ctx.strokeStyle = '#e74c3c';
-    ctx.lineWidth = 2.5 * scale;
-    ctx.setLineDash([8 * scale, 8 * scale]);
+    // Colors for multiple Y series
+    const seriesColors = [
+        { fill: '#0ea5e9', stroke: '#0284c7' },
+        { fill: '#f97316', stroke: '#ea580c' },
+        { fill: '#22c55e', stroke: '#16a34a' },
+        { fill: '#a855f7', stroke: '#9333ea' },
+        { fill: '#ec4899', stroke: '#db2777' },
+        { fill: '#eab308', stroke: '#ca8a04' },
+        { fill: '#14b8a6', stroke: '#0d9488' },
+        { fill: '#ef4444', stroke: '#dc2626' },
+    ];
+    const regressionColors = ['#e74c3c', '#2ecc71', '#9b59b6', '#f39c12', '#1abc9c', '#e91e63', '#00bcd4', '#ff5722'];
     
-    const origRegression = calculateRegression(results.scaledPoints.map(p => ({
-        originalX: p.originalX,
-        originalY: p.originalY
-    })));
+    // Draw regression lines for each Y series
+    const yCount = results.yColumnCount || 1;
     
-    const x1 = 0;
-    const y1 = origRegression.intercept;
-    const x2 = results.xMax * 1.1;
-    const y2 = origRegression.slope * x2 + origRegression.intercept;
-    
-    const gridX1 = x1 / results.xScalePerSquare;
-    const gridY1 = y1 / results.yScalePerSquare;
-    const gridX2 = x2 / results.xScalePerSquare;
-    const gridY2 = y2 / results.yScalePerSquare;
-    
-    ctx.beginPath();
-    ctx.moveTo(toCanvasX(gridX1), toCanvasY(gridY1));
-    ctx.lineTo(toCanvasX(gridX2), toCanvasY(gridY2));
-    ctx.stroke();
+    for (let yIdx = 0; yIdx < yCount; yIdx++) {
+        const colorIdx = yIdx % regressionColors.length;
+        ctx.strokeStyle = regressionColors[colorIdx];
+        ctx.lineWidth = 2.5 * scale;
+        ctx.setLineDash([8 * scale, 8 * scale]);
+        
+        const seriesRegression = calculateRegression(results.scaledPoints, yIdx);
+        
+        const x1 = 0;
+        const y1 = seriesRegression.intercept;
+        const x2 = results.xMax * 1.1;
+        const y2 = seriesRegression.slope * x2 + seriesRegression.intercept;
+        
+        const gridX1 = x1 / results.xScalePerSquare;
+        const gridY1 = y1 / results.yScalePerSquare;
+        const gridX2 = x2 / results.xScalePerSquare;
+        const gridY2 = y2 / results.yScalePerSquare;
+        
+        ctx.beginPath();
+        ctx.moveTo(toCanvasX(gridX1), toCanvasY(gridY1));
+        ctx.lineTo(toCanvasX(gridX2), toCanvasY(gridY2));
+        ctx.stroke();
+    }
     ctx.setLineDash([]);
     
-    // Draw data points
+    // Draw data points for each Y series
     const pointRadius = 8 * scale;
-    ctx.fillStyle = '#0ea5e9';
-    results.scaledPoints.forEach(point => {
-        ctx.beginPath();
-        ctx.arc(toCanvasX(point.scaledX), toCanvasY(point.scaledY), pointRadius, 0, Math.PI * 2);
-        ctx.fill();
+    
+    for (let yIdx = 0; yIdx < yCount; yIdx++) {
+        const colorIdx = yIdx % seriesColors.length;
+        const colors = seriesColors[colorIdx];
         
-        ctx.strokeStyle = '#0284c7';
-        ctx.lineWidth = 2 * scale;
-        ctx.stroke();
-    });
+        results.scaledPoints.forEach(point => {
+            const scaledY = point.scaledYValues[yIdx];
+            if (scaledY === null) return;
+            
+            ctx.fillStyle = colors.fill;
+            ctx.beginPath();
+            ctx.arc(toCanvasX(point.scaledX), toCanvasY(scaledY), pointRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = colors.stroke;
+            ctx.lineWidth = 2 * scale;
+            ctx.stroke();
+        });
+    }
     
     // Draw legend
-    const legendX = canvasWidth - 160 * scale;
+    const legendItemHeight = 25 * scale;
+    const legendHeight = (yCount * 2 + 1) * legendItemHeight;
+    const legendX = canvasWidth - 180 * scale;
     const legendY = 25 * scale;
     
     ctx.font = `${baseFontSize}px Arial`;
     ctx.textAlign = 'left';
     
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.fillRect(legendX - 15 * scale, legendY - 15 * scale, 170 * scale, 55 * scale);
+    ctx.fillRect(legendX - 15 * scale, legendY - 15 * scale, 190 * scale, legendHeight);
     ctx.strokeStyle = '#ddd';
     ctx.lineWidth = 1;
-    ctx.strokeRect(legendX - 15 * scale, legendY - 15 * scale, 170 * scale, 55 * scale);
+    ctx.strokeRect(legendX - 15 * scale, legendY - 15 * scale, 190 * scale, legendHeight);
     
-    ctx.fillStyle = '#0ea5e9';
-    ctx.beginPath();
-    ctx.arc(legendX, legendY, 6 * scale, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#333';
-    ctx.fillText('Data Points', legendX + 15 * scale, legendY + 5 * scale);
-    
-    ctx.strokeStyle = '#e74c3c';
-    ctx.lineWidth = 2.5 * scale;
-    ctx.setLineDash([6 * scale, 6 * scale]);
-    ctx.beginPath();
-    ctx.moveTo(legendX - 8 * scale, legendY + 25 * scale);
-    ctx.lineTo(legendX + 8 * scale, legendY + 25 * scale);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#333';
-    ctx.fillText('Regression Line', legendX + 15 * scale, legendY + 30 * scale);
+    let legendOffset = 0;
+    for (let yIdx = 0; yIdx < yCount; yIdx++) {
+        const colorIdx = yIdx % seriesColors.length;
+        const colors = seriesColors[colorIdx];
+        const subscript = getSubscript(yIdx + 1);
+        const seriesName = yCount > 1 ? `Y${subscript} Data` : 'Data Points';
+        
+        ctx.fillStyle = colors.fill;
+        ctx.beginPath();
+        ctx.arc(legendX, legendY + legendOffset, 6 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#333';
+        ctx.fillText(seriesName, legendX + 15 * scale, legendY + legendOffset + 5 * scale);
+        legendOffset += legendItemHeight;
+        
+        ctx.strokeStyle = regressionColors[colorIdx];
+        ctx.lineWidth = 2 * scale;
+        ctx.setLineDash([5 * scale, 5 * scale]);
+        ctx.beginPath();
+        ctx.moveTo(legendX - 8 * scale, legendY + legendOffset);
+        ctx.lineTo(legendX + 8 * scale, legendY + legendOffset);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#333';
+        const regName = yCount > 1 ? `Y${subscript} Regression` : 'Regression Line';
+        ctx.fillText(regName, legendX + 15 * scale, legendY + legendOffset + 5 * scale);
+        legendOffset += legendItemHeight;
+    }
 }
 
 // Setup graph zoom controls

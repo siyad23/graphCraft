@@ -41,13 +41,19 @@
         <!-- Data Input Section -->
         <section class="card">
             <h2>Data Input</h2>
+            <div class="y-column-controls">
+                <span>Y Columns:</span>
+                <button id="removeYColBtn" class="btn btn-small btn-danger">−</button>
+                <span id="yColumnCount">1</span>
+                <button id="addYColBtn" class="btn btn-small btn-primary">+</button>
+            </div>
             <div class="table-container">
                 <table id="dataTable">
                     <thead>
-                        <tr>
+                        <tr id="tableHeader">
                             <th>#</th>
                             <th>X</th>
-                            <th>Y</th>
+                            <th>Y₁</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -135,12 +141,12 @@
                 <h3>Scaled Coordinates (Plot these on your graph paper)</h3>
                 <table id="scaledTable">
                     <thead>
-                        <tr>
+                        <tr id="scaledTableHeader">
                             <th>#</th>
                             <th>Original X</th>
-                            <th>Original Y</th>
-                            <th>Grid X (squares)</th>
-                            <th>Grid Y (squares)</th>
+                            <th>Original Y₁</th>
+                            <th>Grid X</th>
+                            <th>Grid Y₁</th>
                         </tr>
                     </thead>
                     <tbody id="scaledBody">
@@ -169,11 +175,13 @@
                     </div>
                 </div>
                 
-                <div class="regression-info">
-                    <span class="regression-label">Regression Equation:</span>
-                    <span id="regressionEquation" class="regression-value">y = mx + c</span>
-                    <span class="regression-label">R² =</span>
-                    <span id="rSquared" class="regression-value">-</span>
+                <div class="regression-info" id="regressionContainer">
+                    <div class="regression-item">
+                        <span class="regression-label">Y₁:</span>
+                        <span class="regression-equation">y = mx + c</span>
+                        <span class="regression-label">R² =</span>
+                        <span class="regression-r2">-</span>
+                    </div>
                 </div>
                 <div class="graph-controls">
                     <button id="zoomOutBtn" class="btn btn-small btn-primary">➖ Zoom Out</button>
