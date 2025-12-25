@@ -1822,35 +1822,16 @@ function addDataTableToPdf(pdf, graphTitle) {
     pdf.text(tableTitle + ' - Data', tablePageWidth / 2, yPos, { align: 'center' });
     yPos += 15;
     
-    // Scale info
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(`X-Axis Scale: 1 square = ${currentResults.xScalePerSquare}`, tableMargin, yPos);
-    yPos += 6;
-    pdf.text(`Y-Axis Scale: 1 square = ${currentResults.yScalePerSquare}`, tableMargin, yPos);
-    yPos += 12;
-    
     // Build dynamic column widths and headers based on Y column count
-    const baseColWidth = 30;
-    const colWidths = [12, baseColWidth]; // # and Original X
-    const headers = ['#', `Orig ${xName}`];
+    const baseColWidth = 35;
+    const colWidths = [15, baseColWidth]; // # and X
+    const headers = ['#', xName];
     
-    // Add Original Y columns
+    // Add Y columns
     for (let i = 0; i < yCount; i++) {
         const yColName = yNames[i] || `Y${i + 1}`;
         colWidths.push(baseColWidth);
-        headers.push(`Orig ${yColName}`);
-    }
-    
-    // Add Grid X
-    colWidths.push(baseColWidth);
-    headers.push(`Grid ${xName}`);
-    
-    // Add Grid Y columns
-    for (let i = 0; i < yCount; i++) {
-        const yColName = yNames[i] || `Y${i + 1}`;
-        colWidths.push(baseColWidth);
-        headers.push(`Grid ${yColName}`);
+        headers.push(yColName);
     }
     
     const startX = tableMargin;
@@ -1861,7 +1842,7 @@ function addDataTableToPdf(pdf, graphTitle) {
     
     pdf.setTextColor(255, 255, 255);
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(8);
+    pdf.setFontSize(10);
     let xPos = startX + 2;
     headers.forEach((header, i) => {
         pdf.text(header, xPos, yPos);
@@ -1872,7 +1853,7 @@ function addDataTableToPdf(pdf, graphTitle) {
     // Table rows
     pdf.setTextColor(0, 0, 0);
     pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
+    pdf.setFontSize(9);
     
     currentResults.scaledPoints.forEach((point, index) => {
         if (yPos > tablePageHeight - 20) {
@@ -1885,20 +1866,12 @@ function addDataTableToPdf(pdf, graphTitle) {
             pdf.rect(startX, yPos - 4, totalWidth, 6, 'F');
         }
         
-        // Build row data dynamically
+        // Build row data - only original values
         const rowData = [(index + 1).toString(), point.originalX.toString()];
         
         // Original Y values
         point.originalYValues.forEach(y => {
             rowData.push(y !== null ? y.toString() : '-');
-        });
-        
-        // Grid X
-        rowData.push(point.scaledX.toFixed(2));
-        
-        // Grid Y values
-        point.scaledYValues.forEach(y => {
-            rowData.push(y !== null ? y.toFixed(2) : '-');
         });
         
         xPos = startX + 2;
