@@ -213,8 +213,8 @@ function calculateScaledCoordinates() {
             index: point.index,
             originalX: point.x,
             originalY: point.y,
-            scaledX: Math.round(scaledX * 2) / 2,  // Round to nearest 0.5
-            scaledY: Math.round(scaledY * 2) / 2   // Round to nearest 0.5
+            scaledX: Math.round(scaledX),  // Round to nearest integer (x.5+ rounds up)
+            scaledY: Math.round(scaledY)   // Round to nearest integer (x.5+ rounds up)
         };
     });
     
@@ -239,19 +239,170 @@ function calculateScaledCoordinates() {
 
 // Calculate a nice scale that keeps max value between minPercent and maxPercent of grid
 function calculateNiceScaleInRange(maxValue, gridSize, minPercent, maxPercent) {
-    // IMPORTANT: The scaled value must NEVER exceed the grid size
-    // maxValue / scale = used grid squares
-    // scale must be >= maxValue / gridSize to fit within grid
-    const absoluteMinScale = maxValue / gridSize;  // Scale that uses exactly 100% of grid
+    // Target: data should use 85-95% of grid, leaving 5-15% margin
+    const minUtilization = 0.85;
+    const maxUtilization = 0.95;
     
-    // Calculate the range of acceptable scales for 85-95% utilization
-    const minScale = maxValue / (gridSize * maxPercent);  // Scale for 95%
-    const maxScale = maxValue / (gridSize * minPercent);  // Scale for 85%
+    // Calculate scale bounds
+    const minScale = maxValue / (gridSize * maxUtilization);  // Scale for 95% utilization
+    const maxScale = maxValue / (gridSize * minUtilization);  // Scale for 85% utilization
     
-    // Find the smallest multiple of 0.5 that is >= absoluteMinScale
-    const scale = Math.ceil(absoluteMinScale * 2) / 2;
+    // Find the best nice number within this range
+    const niceScale = findBestNiceNumberInRange(minScale, maxScale);
     
-    return scale;
+    // Verify it's valid (should always be, but safety check)
+    const utilization = maxValue / (niceScale * gridSize);
+    if (utilization > maxUtilization) {
+        return findNextNiceNumber(minScale);
+    }
+    
+    return niceScale;
+}
+
+/**
+ * Sophisticated Nice Number Algorithm
+ * 
+ * Finds the best "nice" number within a given range [minVal, maxVal]
+ * Nice numbers are numbers that create readable axis labels:
+ * - Pattern: d × 10^n where d is a "nice" multiplier
+ * 
+ * The algorithm searches through all nice numbers in the range
+ * and picks the one closest to the geometric mean (optimal balance)
+ */
+function findBestNiceNumberInRange(minVal, maxVal) {
+    if (minVal <= 0) minVal = 1e-10;
+    if (maxVal <= minVal) maxVal = minVal * 2;
+    
+    // Extended nice multipliers for better coverage
+    // Includes: integers 1-9, halves (1.5, 2.5...), and quarters (1.25, 1.75...)
+    const niceMultipliers = [
+        1, 1.2, 1.25, 1.5, 1.75, 
+        2, 2.5, 
+        3, 3.5, 
+        4, 4.5, 
+        5, 
+        6, 
+        7, 7.5,
+        8, 
+        9
+    ];
+    
+    // Collect candidates within range AND nearby (for fallback)
+    const inRangeCandidates = [];
+    const allCandidates = [];
+    
+    // Determine the range of exponents to check
+    const minExp = Math.floor(Math.log10(minVal)) - 1;
+    const maxExp = Math.ceil(Math.log10(maxVal)) + 1;
+    
+    for (let exp = minExp; exp <= maxExp; exp++) {
+        const magnitude = Math.pow(10, exp);
+        for (const mult of niceMultipliers) {
+            const niceNum = mult * magnitude;
+            allCandidates.push(niceNum);
+            if (niceNum >= minVal - 1e-15 && niceNum <= maxVal + 1e-15) {
+                inRangeCandidates.push(niceNum);
+            }
+        }
+    }
+    
+    // Target: geometric mean gives ~90% utilization
+    const targetValue = Math.sqrt(minVal * maxVal);
+    
+    // Prefer in-range candidates, but fall back to closest nice number if none
+    const candidates = inRangeCandidates.length > 0 ? inRangeCandidates : allCandidates;
+    
+    // If still no candidates, something is very wrong - return minVal
+    if (candidates.length === 0) {
+        return minVal;
+    }
+    
+    // Pick the candidate closest to target value (using log scale for fairness)
+    let best = candidates[0];
+    let bestDiff = Math.abs(Math.log(best) - Math.log(targetValue));
+    
+    for (const candidate of candidates) {
+        const diff = Math.abs(Math.log(candidate) - Math.log(targetValue));
+        if (diff < bestDiff) {
+            bestDiff = diff;
+            best = candidate;
+        }
+    }
+    
+    // If no in-range candidate was found, ensure we use one >= minVal
+    // to guarantee data fits in grid (may exceed 95% utilization but better than overflow)
+    if (inRangeCandidates.length === 0 && best < minVal) {
+        // Find smallest nice number >= minVal
+        for (const candidate of allCandidates.sort((a, b) => a - b)) {
+            if (candidate >= minVal - 1e-15) {
+                return candidate;
+            }
+        }
+    }
+    
+    return best;
+}
+
+/**
+ * Find a nice number close to the target value
+ * Used as fallback when range-based search isn't applicable
+ */
+function findNiceNumber(value) {
+    if (value <= 0) return 0.1;
+    
+    // Get the order of magnitude
+    const exponent = Math.floor(Math.log10(value));
+    const magnitude = Math.pow(10, exponent);
+    
+    // Normalize to range [1, 10)
+    const normalized = value / magnitude;
+    
+    // Nice number candidates
+    const niceNumbers = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 10];
+    
+    // Find the closest nice number
+    let closest = niceNumbers[0];
+    let minDiff = Math.abs(normalized - closest);
+    
+    for (const nice of niceNumbers) {
+        const diff = Math.abs(normalized - nice);
+        if (diff < minDiff) {
+            minDiff = diff;
+            closest = nice;
+        }
+    }
+    
+    if (closest === 10) return magnitude * 10;
+    return closest * magnitude;
+}
+
+/**
+ * Find the smallest nice number that is >= minValue
+ * Used when we need to ensure data fits within grid bounds
+ */
+function findNextNiceNumber(minValue) {
+    if (minValue <= 0) return 0.1;
+    
+    // Get the order of magnitude
+    const exponent = Math.floor(Math.log10(minValue));
+    const magnitude = Math.pow(10, exponent);
+    
+    // Normalize to range [1, 10)
+    const normalized = minValue / magnitude;
+    
+    // Nice number sequence (ascending order)
+    const niceNumbers = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 10];
+    
+    // Find the first nice number >= normalized value
+    for (const nice of niceNumbers) {
+        if (nice >= normalized - 1e-10) {
+            if (nice === 10) return magnitude * 10;
+            return nice * magnitude;
+        }
+    }
+    
+    // Fallback: next order of magnitude
+    return magnitude * 10;
 }
 
 // Display the results
